@@ -1,4 +1,4 @@
-# 🅿️ Parkify - Sistema de Gestión de Estacionamiento ESCOM
+# Parkify - Sistema de Gestión de Estacionamiento ESCOM
 
 Plataforma web integral para la gestión digital del estacionamiento de la Escuela Superior de Cómputo (ESCOM). Permite el registro diferenciado de usuarios (comunidad ESCOM y visitantes), generación de pases temporales con QR, control de accesos, mapeo visual del estacionamiento de motocicletas, sistema de reportes y estadísticas operativas.
 
@@ -159,8 +159,7 @@ parkify/
 │   ├── database/         # Diagramas de BD
 │
 ├── .gitignore
-├── README.md             # Este archivo
-└── LICENSE
+└── README.md             # Este archivo
 ```
 
 ## Scripts Disponibles
