@@ -27,6 +27,7 @@ app.use('/api/reportes', require('./routes/reporteRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/notificaciones', require('./routes/notificacionRoutes'));
 
+
 // Ruta de prueba (Health Check)
 app.get('/', (req, res) => {
   res.json({ 
