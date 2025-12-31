@@ -1,147 +1,132 @@
-const { Acceso, Vehiculo, Usuario } = require('../models');
-const { Op } = require('sequelize');
+const { sequelize } = require('../config/database');
+const { QueryTypes } = require('sequelize');
 
-// 1. VALIDAR ACCESO (El Ojo del Guardia)
-// Recibe el QR, busca el vehículo y le dice al guardia: "Es Juan, trae un Aveo Rojo".
+// --- 1. VALIDAR ACCESO ---
 exports.validarAcceso = async (req, res) => {
   try {
     const { id_vehiculo } = req.body;
 
-    // 1. Buscamos el vehículo e intentamos traer al usuario
-    const vehiculo = await Vehiculo.findByPk(id_vehiculo, {
-      include: [{ 
-        model: Usuario, 
-        as: 'usuario', // Asegúrate de que en tus Modelos definiste "as: 'usuario'"
-        attributes: ['nombre_completo', 'rol', 'activo'] 
-      }]
+    // 1. Obtener datos del Vehículo y Dueño
+    const [vehiculo] = await sequelize.query(`
+      SELECT 
+        v.id_vehiculo, v.placas, v.marca, v.modelo, v.color, v.tipo, v.foto_documento_validacion as foto_url,
+        u.nombre_completo as conductor, u.rol, u.activo
+      FROM vehiculos v
+      JOIN usuarios u ON v.id_usuario = u.id_usuario
+      WHERE v.id_vehiculo = :id
+    `, {
+      replacements: { id: id_vehiculo },
+      type: QueryTypes.SELECT
     });
 
-    // 2. Si no existe el vehículo
     if (!vehiculo) {
       return res.status(404).json({ error: 'Vehículo no encontrado en el sistema.' });
     }
-
-    // --- DEBUGGING (MIRA ESTO EN TU CONSOLA NEGRA) ---
-    // Esto nos dirá si Sequelize trajo al usuario o no
-    console.log("Vehículo encontrado:", JSON.stringify(vehiculo, null, 2)); 
-
-    // 3. DEFENSIVE CODING: Verificar si el usuario se cargó correctamente
-    // Intentamos leer 'usuario' (alias minúscula) o 'Usuario' (defecto mayúscula)
-    const propietario = vehiculo.usuario || vehiculo.Usuario;
-
-    if (!propietario) {
-      console.error(`ERROR DE INTEGRIDAD: El vehículo ${id_vehiculo} no tiene usuario asociado.`);
-      return res.status(500).json({ 
-        error: 'Error de datos', 
-        detalle: 'Este vehículo no tiene un propietario válido asignado.' 
-      });
+    if (!vehiculo.activo) {
+      return res.status(403).json({ error: 'ACCESO DENEGADO: Usuario inactivo.' });
     }
 
-    // 4. Validar si el usuario está activo (Ahora usamos la variable segura 'propietario')
-    if (!propietario.activo) {
-      return res.status(403).json({ 
-        error: 'ACCESO DENEGADO', 
-        detalle: 'El usuario tiene el acceso suspendido.' 
-      });
-    }
-
-    // 5. Buscar historial para sugerir entrada/salida
-    const ultimoAcceso = await Acceso.findOne({
-      where: { id_vehiculo },
-      order: [['fecha_hora_entrada', 'DESC']]
+    // 2. Determinar Estado (¿Está adentro o afuera?)
+    // Lógica: Está dentro si tiene una entrada SIN salida posterior (fecha_hora DESC)
+    const [estadoActual] = await sequelize.query(`
+      SELECT a.id_acceso, a.id_cajon_moto, a.tipo
+      FROM accesos a
+      JOIN pases p ON a.id_pase = p.id_pase
+      WHERE p.id_vehiculo = :id
+      ORDER BY a.fecha_hora DESC
+      LIMIT 1
+    `, {
+      replacements: { id: id_vehiculo },
+      type: QueryTypes.SELECT
     });
 
     let accionSugerida = 'entrada';
-    if (ultimoAcceso && ultimoAcceso.fecha_hora_salida === null) {
-      accionSugerida = 'salida';
+    let cajonAsignado = null;
+
+    // Si existe historial y el último movimiento fue entrada, toca salida
+    if (estadoActual && estadoActual.tipo === 'entrada') {
+        accionSugerida = 'salida';
+        cajonAsignado = estadoActual.id_cajon_moto;
     }
 
-    // 6. Responder
     res.json({
-      mensaje: 'Vehículo Verificado',
-      vehiculo: {
-        id_vehiculo: vehiculo.id_vehiculo,
-        placas: vehiculo.placas,
-        marca: vehiculo.marca,
-        modelo: vehiculo.modelo,
-        color: vehiculo.color,
-        tipo: vehiculo.tipo,
-        foto_url: vehiculo.foto_url,
-        conductor: propietario.nombre_completo, // Usamos la variable segura
-        rol: propietario.rol
-      },
-      accionSugerida
+      mensaje: 'Vehículo validado',
+      vehiculo,
+      accionSugerida,
+      cajonAsignado
     });
 
   } catch (error) {
-    console.error("Error en validarAcceso:", error);
-    res.status(500).json({ error: 'Error interno validando acceso' });
+    console.error("Error validarAcceso:", error);
+    res.status(500).json({ error: 'Error interno al validar vehículo.' });
   }
 };
 
-// 2. REGISTRAR EL MOVIMIENTO (Acción Real)
+// --- 2. REGISTRAR MOVIMIENTO ---
 exports.registrarMovimiento = async (req, res) => {
+  const t = await sequelize.transaction(); 
   try {
-    const { id_vehiculo, tipo_movimiento, id_cajon_moto } = req.body; // tipo_movimiento: 'entrada' | 'salida'
-    const id_guardia = req.user.id;
-    const io = req.app.get('io'); // WebSockets
+    const { id_vehiculo, tipo_movimiento, id_cajon_moto } = req.body;
 
-    let acceso;
+    // --- CORRECCIÓN AQUÍ: Extracción Segura del ID del Guardia ---
+    // A veces el token decodificado trae 'id' y otras 'id_usuario'
+    console.log("Usuario en Request:", req.user); // DEBUG
+    const id_guardia = req.user.id_usuario || req.user.id;
 
-    if (tipo_movimiento === 'entrada') {
-      // --- LÓGICA DE ENTRADA ---
-      acceso = await Acceso.create({
-        id_vehiculo,
-        tipo_acceso: 'alumno', // Opcional
-        id_admin_guardia_entrada: id_guardia,
-        fecha_hora_entrada: new Date(),
-        id_cajon_moto: id_cajon_moto || null
-      });
-
-      // Notificar mapa de motos si aplica
-      if (id_cajon_moto && io) {
-        io.emit('mapa_actualizado', { accion: 'ocupar', cajon: id_cajon_moto });
-      }
-
-    } else {
-      // --- LÓGICA DE SALIDA ---
-      // Buscar el registro abierto para cerrarlo
-      acceso = await Acceso.findOne({
-        where: { 
-          id_vehiculo, 
-          fecha_hora_salida: null 
-        },
-        order: [['fecha_hora_entrada', 'DESC']]
-      });
-
-      if (!acceso) {
-        return res.status(400).json({ error: 'No se encontró un registro de entrada abierto para este vehículo.' });
-      }
-
-      acceso.fecha_hora_salida = new Date();
-      acceso.id_admin_guardia_salida = id_guardia;
-      await acceso.save();
-
-      // Liberar mapa de motos
-      if (acceso.id_cajon_moto && io) {
-        io.emit('mapa_actualizado', { accion: 'liberar', cajon: acceso.id_cajon_moto });
-      }
+    if (!id_guardia) {
+        await t.rollback();
+        return res.status(401).json({ error: 'No se pudo identificar al guardia. Inicia sesión nuevamente.' });
     }
 
-    // Notificar actualización general (stats)
-    if (io) io.emit('stats_actualizado');
+    // 1. Necesitamos un PASE VIGENTE
+    let [pase] = await sequelize.query(`
+      SELECT id_pase FROM pases 
+      WHERE id_vehiculo = :id AND estado = 'vigente' AND fecha_vencimiento > NOW()
+      LIMIT 1
+    `, { replacements: { id: id_vehiculo }, type: QueryTypes.SELECT, transaction: t });
 
-    res.json({ 
-      mensaje: `${tipo_movimiento === 'entrada' ? 'Bienvenido' : 'Hasta luego'}`, 
-      tipo: tipo_movimiento 
+    // Si no tiene pase, creamos uno temporal
+    if (!pase) {
+        const folio = `EXP-${Date.now()}`; 
+        const [nuevoPase] = await sequelize.query(`
+            INSERT INTO pases (folio, id_vehiculo, fecha_emision, fecha_vencimiento, estado)
+            VALUES (:folio, :id, NOW(), NOW() + INTERVAL '24 hours', 'vigente')
+            RETURNING id_pase
+        `, { replacements: { folio, id: id_vehiculo }, type: QueryTypes.INSERT, transaction: t });
+        pase = nuevoPase[0];
+    }
+
+    // 2. Insertar el ACCESO
+    // Aseguramos que idGuardia tenga un valor válido
+    await sequelize.query(`
+      INSERT INTO accesos (id_pase, tipo, fecha_hora, metodo_validacion, id_admin_guardia, id_cajon_moto)
+      VALUES (:idPase, :tipo, NOW(), 'qr', :idGuardia, :idCajon)
+    `, {
+      replacements: {
+        idPase: pase.id_pase,
+        tipo: tipo_movimiento, 
+        idGuardia: id_guardia, // Ahora garantizamos que esto no es undefined
+        idCajon: (tipo_movimiento === 'entrada' && id_cajon_moto) ? parseInt(id_cajon_moto) : null
+      },
+      type: QueryTypes.INSERT,
+      transaction: t
     });
 
+    // 3. Manejo de estado de cajones (Opcional, si tienes tabla de cajones)
+    // if (tipo_movimiento === 'entrada' && id_cajon_moto) { ... }
+
+    await t.commit();
+    res.json({ mensaje: `Acceso de ${tipo_movimiento} registrado correctamente.` });
+
   } catch (error) {
-    console.error(error);
-    // Manejo de tu Trigger P0001 (Postgres)
+    await t.rollback();
+    console.error("Error registrarMovimiento:", error);
+    
+    // Capturar errores de Base de Datos (ej: Triggers de doble entrada)
     if (error.original && error.original.code === 'P0001') {
-      return res.status(409).json({ error: error.original.message });
+        return res.status(400).json({ error: error.original.message });
     }
-    res.status(500).json({ error: 'Error registrando movimiento' });
+    
+    res.status(500).json({ error: 'Error al registrar el movimiento.' });
   }
 };

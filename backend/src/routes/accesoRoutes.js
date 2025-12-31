@@ -3,14 +3,13 @@ const router = express.Router();
 const accesoController = require('../controllers/accesoController');
 const verificarToken = require('../middlewares/authMiddleware');
 
-// Middleware global de seguridad (Solo guardias/admins deberían poder usar esto)
-// Idealmente agregaríamos verificarRol('admin_guardia') aquí.
+// Middleware global de seguridad
 router.use(verificarToken);
 
-// 1. Validar (Escanear QR y ver datos)
+// 1. Escanear y consultar estado
 router.post('/validar', accesoController.validarAcceso);
 
-// 2. Registrar (Dar click en "Abrir Pluma")
+// 2. Confirmar y guardar en BD
 router.post('/registrar', accesoController.registrarMovimiento);
 
 module.exports = router;

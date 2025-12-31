@@ -7,28 +7,32 @@ const Acceso = sequelize.define('Acceso', {
     primaryKey: true,
     autoIncrement: true
   },
-  id_pase: {
+  id_vehiculo: {
     type: DataTypes.INTEGER,
     allowNull: false
   },
-  tipo: {
-    type: DataTypes.ENUM('entrada', 'salida'),
-    allowNull: false
+  // Para saber quién dejó pasar al vehículo
+  id_admin_guardia_entrada: {
+    type: DataTypes.INTEGER, // O UUID si tus usuarios usan UUID
+    allowNull: true
   },
-  fecha_hora: {
+  id_admin_guardia_salida: {
+    type: DataTypes.INTEGER, // O UUID
+    allowNull: true
+  },
+  fecha_hora_entrada: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
   },
-  metodo_validacion: {
-    type: DataTypes.ENUM('placas', 'folio', 'qr', 'curp'),
-    allowNull: false
+  fecha_hora_salida: {
+    type: DataTypes.DATE,
+    allowNull: true // Null = El carro sigue adentro
   },
-  id_admin_guardia: {
-    type: DataTypes.UUID,
-    allowNull: false
-  },
-  id_cajon_moto: DataTypes.INTEGER, // Null si es auto
-  tiempo_estancia: DataTypes.STRING // Intervalo de Postgres
+  // Exclusivo para motos
+  id_cajon_moto: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  }
 }, {
   tableName: 'accesos',
   timestamps: false
