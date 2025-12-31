@@ -1,4 +1,4 @@
-const { Reporte, Usuario } = require('../models');
+const { Reporte, Usuario,Notificacion } = require('../models');
 const { uploadFile } = require('../services/storageService');
 const { enviarCorreoPase } = require('../services/emailService'); // Reutilizaremos lógica de correo
 // Nota: Deberíamos crear una función genérica enviarCorreoNotificacion, pero usaremos un mock aquí.
@@ -9,7 +9,7 @@ const enviarCorreoEstado = async (email, nombre, reporte) => {
     console.log(`📧 Enviando correo a ${email}: Tu reporte "${reporte.asunto}" cambió a estado: ${reporte.estado}`);
 };
 
-exports.crearReporte = async (req, res) => {
+exports.crearReporte = async (req, res) => { 
   try {
     const { asunto, descripcion } = req.body;
     const id_usuario = req.user.id;
@@ -31,6 +31,39 @@ exports.crearReporte = async (req, res) => {
       descripcion,
       fotos_evidencia: fotosUrls
     });
+
+    // 1. Buscar a todos los ADMINS para notificarles
+    const admins = await Usuario.findAll({ 
+        where: { rol: 'admin_guardia', activo: true } 
+    });
+
+    // 2. Crear una notificación en BD para CADA admin
+    const notificacionesData = admins.map(admin => ({
+        id_usuario: admin.id_usuario,
+        titulo: 'Nuevo Reporte de Incidencia',
+        mensaje: `Un usuario ha reportado: "${asunto}"`,
+        tipo: 'reporte',
+        referencia_id: nuevoReporte.id_reporte,
+        leida: false,
+        fecha_creacion: new Date()
+    }));
+
+    if (notificacionesData.length > 0) {
+        await Notificacion.bulkCreate(notificacionesData);
+    }
+
+    // 3. Emitir evento Socket (Ahora sí debería funcionar)
+    const io = req.app.get('io');
+    if (io) {
+        console.log(`📡 Emitiendo 'nuevo_reporte_creado' a ${admins.length} admins`);
+        io.to('sala_admins').emit('nuevo_reporte_creado', {
+            id: nuevoReporte.id_reporte,
+            asunto: asunto,
+            mensaje: `Un usuario ha reportado: "${asunto}"`
+        });
+    } else {
+        console.error("❌ Error: No se encontró la instancia de Socket.io en req.app");
+    }
 
     res.status(201).json({ mensaje: 'Reporte enviado', reporte: nuevoReporte });
 

@@ -11,8 +11,9 @@ const server = http.createServer(app);
 // 2. Configurar Socket.io
 const io = new Server(server, {
   cors: {
-    origin: "*", // En producción, pon aquí la URL de tu frontend (ej: http://localhost:5173)
-    methods: ["GET", "POST"]
+    origin: ["http://localhost:5173", "http://localhost:3000"], // Tus puertos de frontend
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -21,7 +22,21 @@ app.set('io', io);
 
 // 4. Escuchar conexiones de clientes (Frontend)
 io.on('connection', (socket) => {
-  console.log('⚡ Cliente conectado vía WebSocket:', socket.id);
+  console.log('🔌 Nuevo cliente conectado ID:', socket.id);
+
+  // 👇 LÓGICA PARA UNIRSE A LA SALA DE ADMINS
+  socket.on('identificarse', (userData) => {
+    console.log('👤 Intento de identificación:', userData);
+    
+    // Validamos si es el rol correcto
+    if (userData && userData.rol === 'admin_guardia') {
+      socket.join('sala_admins');
+      console.log(`✅ Usuario ${userData.nombre} (ID: ${socket.id}) unido a sala_admins`);
+      
+      // Prueba de bienvenida (opcional)
+      socket.emit('mensaje_sistema', 'Has entrado al canal de seguridad');
+    }
+  });
 
   socket.on('disconnect', () => {
     console.log('❌ Cliente desconectado:', socket.id);

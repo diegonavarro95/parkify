@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
-import { FileText, Plus, AlertCircle, CheckCircle, Clock, Image as ImageIcon, X, MessageSquare, Trash2 } from 'lucide-react';
+import { FileText, Plus, AlertCircle, CheckCircle, Clock, Image as ImageIcon, X, MessageSquare, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { obtenerMisReportes, crearReporte } from '../../api/reportes';
 import Card from '../../components/common/Card';
@@ -11,27 +11,22 @@ import Modal from '../../components/common/Modal';
 const MisReportes = () => {
   const [reportes, setReportes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   
-  // Estado local para manejar los archivos manualmente y permitir "acumular" selecciones
+  // Estados para Modal de Creación
+  const [showModal, setShowModal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]); 
   const [previews, setPreviews] = useState([]);
 
-  // Destructuramos setValue para actualizar el formulario manualmente
+  // Estados para Visor de Galería (Lightbox)
+  const [galleryState, setGalleryState] = useState({
+    isOpen: false,
+    images: [],
+    currentIndex: 0
+  });
+
   const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm();
 
-  // 1. Efecto para generar URLs de previsualización cuando cambian los archivos seleccionados
-  useEffect(() => {
-    if (selectedFiles.length > 0) {
-      const newPreviews = selectedFiles.map(file => URL.createObjectURL(file));
-      setPreviews(newPreviews);
-      // Limpieza de memoria
-      return () => newPreviews.forEach(url => URL.revokeObjectURL(url));
-    } else {
-      setPreviews([]);
-    }
-  }, [selectedFiles]);
-
+  // --- 1. LÓGICA DE CARGA ---
   const cargarReportes = async () => {
     try {
       setLoading(true);
@@ -49,27 +44,29 @@ const MisReportes = () => {
     cargarReportes();
   }, []);
 
-  // Manejador personalizado para la subida de archivos
+  // --- 2. LÓGICA DE FORMULARIO (SUBIDA) ---
+  useEffect(() => {
+    if (selectedFiles.length > 0) {
+      const newPreviews = selectedFiles.map(file => URL.createObjectURL(file));
+      setPreviews(newPreviews);
+      return () => newPreviews.forEach(url => URL.revokeObjectURL(url));
+    } else {
+      setPreviews([]);
+    }
+  }, [selectedFiles]);
+
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
-    
-    // Validar cantidad total
     if (selectedFiles.length + files.length > 3) {
-      toast.error('Solo puedes subir un máximo de 3 fotos en total.');
+      toast.error('Solo puedes subir un máximo de 3 fotos.');
       return;
     }
-
     const newFiles = [...selectedFiles, ...files];
     setSelectedFiles(newFiles);
-    
-    // Sincronizar con React Hook Form
     setValue('fotos', newFiles); 
-    
-    // Limpiar el input para permitir subir el mismo archivo si se borró antes
     e.target.value = ''; 
   };
 
-  // Función para eliminar una foto específica de la lista
   const removeImage = (indexToRemove) => {
     const newFiles = selectedFiles.filter((_, index) => index !== indexToRemove);
     setSelectedFiles(newFiles);
@@ -78,9 +75,8 @@ const MisReportes = () => {
 
   const onSubmit = async (data) => {
     try {
-      // data.fotos ya tiene el array actualizado gracias a setValue
       await crearReporte(data);
-      toast.success('Reporte enviado correctamente');
+      toast.success('Reporte enviado');
       handleCloseModal();
       cargarReportes();
     } catch (error) {
@@ -91,11 +87,61 @@ const MisReportes = () => {
 
   const handleCloseModal = () => {
     setShowModal(false);
-    setSelectedFiles([]); // Limpiar archivos
-    setPreviews([]);      // Limpiar previews
-    reset();              // Limpiar formulario
+    setSelectedFiles([]);
+    setPreviews([]);
+    reset();
   };
 
+  // --- 3. LÓGICA DE GALERÍA (LIGHTBOX) ---
+  
+  const openGallery = (images, index) => {
+    setGalleryState({
+      isOpen: true,
+      images,
+      currentIndex: index
+    });
+    // Bloquear scroll del body
+    document.body.style.overflow = 'hidden';
+  };
+
+  const closeGallery = useCallback(() => {
+    setGalleryState(prev => ({ ...prev, isOpen: false }));
+    // Restaurar scroll del body
+    document.body.style.overflow = 'unset';
+  }, []);
+
+  const nextImage = useCallback((e) => {
+    e?.stopPropagation();
+    setGalleryState(prev => ({
+      ...prev,
+      currentIndex: (prev.currentIndex + 1) % prev.images.length
+    }));
+  }, []);
+
+  const prevImage = useCallback((e) => {
+    e?.stopPropagation();
+    setGalleryState(prev => ({
+      ...prev,
+      currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
+    }));
+  }, []);
+
+  // Atajos de teclado (Esc, Flechas)
+  useEffect(() => {
+    if (!galleryState.isOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') closeGallery();
+      if (e.key === 'ArrowRight') nextImage();
+      if (e.key === 'ArrowLeft') prevImage();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [galleryState.isOpen, closeGallery, nextImage, prevImage]);
+
+
+  // --- 4. RENDERIZADO ---
   const getStatusConfig = (estado) => {
     switch (estado) {
       case 'nuevo': return { color: 'bg-blue-100 text-blue-800', icon: AlertCircle, text: 'Nuevo' };
@@ -120,7 +166,7 @@ const MisReportes = () => {
         </Button>
       </div>
 
-      {/* Lista */}
+      {/* Lista de Reportes */}
       {loading ? (
         <div className="py-10 text-center text-slate-500 animate-pulse">Cargando reportes...</div>
       ) : reportes.length === 0 ? (
@@ -140,6 +186,8 @@ const MisReportes = () => {
             return (
               <Card key={reporte.id_reporte} className="border-l-4 border-l-brand-500 hover:shadow-md transition-all">
                 <div className="flex flex-col md:flex-row gap-4 justify-between">
+                  
+                  {/* Info Texto */}
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-3 mb-1">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${status.color}`}>
@@ -163,12 +211,18 @@ const MisReportes = () => {
                     )}
                   </div>
 
+                  {/* Miniaturas de Galería */}
                   {reporte.fotos_evidencia && reporte.fotos_evidencia.length > 0 && (
                     <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
                       {reporte.fotos_evidencia.map((fotoUrl, idx) => (
-                        <a key={idx} href={fotoUrl} target="_blank" rel="noopener noreferrer" className="relative group w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border border-slate-200 shadow-sm">
+                        <div 
+                          key={idx} 
+                          onClick={() => openGallery(reporte.fotos_evidencia, idx)}
+                          className="relative group w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border border-slate-200 shadow-sm cursor-zoom-in"
+                        >
                           <img src={fotoUrl} alt="Evidencia" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                        </a>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                        </div>
                       ))}
                     </div>
                   )}
@@ -179,7 +233,65 @@ const MisReportes = () => {
         </div>
       )}
 
-      {/* Modal Crear */}
+      {/* --- COMPONENTE VISOR DE GALERÍA (LIGHTBOX) --- */}
+      {galleryState.isOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center animate-fade-in" onClick={closeGallery}>
+            
+            {/* Botón Cerrar */}
+            <button 
+                onClick={closeGallery}
+                className="absolute top-4 right-4 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all z-[110]"
+            >
+                <X size={32} />
+            </button>
+
+            {/* Contenedor Imagen Principal */}
+            <div className="relative w-full h-full flex items-center justify-center p-4 md:p-10" onClick={(e) => e.stopPropagation()}>
+                
+                {/* Imagen */}
+                <img 
+                    src={galleryState.images[galleryState.currentIndex]} 
+                    alt="Vista ampliada" 
+                    className="max-h-[85vh] max-w-full object-contain rounded-md shadow-2xl animate-scale-in select-none"
+                />
+
+                {/* Controles de Navegación (Solo si hay más de 1 foto) */}
+                {galleryState.images.length > 1 && (
+                    <>
+                        {/* Anterior */}
+                        <button 
+                            onClick={prevImage}
+                            className="absolute left-2 md:left-8 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 p-3 rounded-full transition-all"
+                        >
+                            <ChevronLeft size={40} />
+                        </button>
+                        
+                        {/* Siguiente */}
+                        <button 
+                            onClick={nextImage}
+                            className="absolute right-2 md:right-8 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 p-3 rounded-full transition-all"
+                        >
+                            <ChevronRight size={40} />
+                        </button>
+
+                        {/* Indicador de posición (Puntos abajo) */}
+                        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
+                            {galleryState.images.map((_, idx) => (
+                                <div 
+                                    key={idx}
+                                    className={`w-2 h-2 rounded-full transition-all ${
+                                        idx === galleryState.currentIndex ? 'bg-white w-4' : 'bg-white/40'
+                                    }`}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+      )}
+
+      {/* --- MODAL DE CREACIÓN --- */}
       <Modal isOpen={showModal} onClose={handleCloseModal} title="Nuevo Reporte de Incidencia">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input
@@ -199,12 +311,10 @@ const MisReportes = () => {
             {errors.descripcion && <span className="text-xs text-red-500">{errors.descripcion.message}</span>}
           </div>
 
-          {/* Área de Subida de Fotos Mejorada */}
+          {/* Subida de Fotos */}
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Evidencia Fotográfica
-              </label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Evidencia Fotográfica</label>
               <span className={`text-xs ${selectedFiles.length >= 3 ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
                 {selectedFiles.length} / 3 Fotos
               </span>
@@ -231,27 +341,15 @@ const MisReportes = () => {
                     </>
                   )}
                 </div>
-                
-                {/* Input deshabilitado si ya hay 3 fotos */}
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  multiple 
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  disabled={selectedFiles.length >= 3}
-                />
+                <input type="file" className="hidden" multiple accept="image/*" onChange={handleFileChange} disabled={selectedFiles.length >= 3} />
               </label>
             </div>
 
-            {/* Previews con Botón de Eliminar */}
             {previews.length > 0 && (
               <div className="flex gap-3 mt-4 overflow-x-auto p-1">
                 {previews.map((url, idx) => (
                   <div key={idx} className="relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border border-slate-200 shadow-sm group">
                     <img src={url} className="w-full h-full object-cover" alt="Preview" />
-                    
-                    {/* Botón X para eliminar */}
                     <button
                       type="button"
                       onClick={() => removeImage(idx)}

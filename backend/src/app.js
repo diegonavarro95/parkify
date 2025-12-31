@@ -25,6 +25,7 @@ app.use('/api/accesos', require('./routes/accesoRoutes'));
 app.use('/api/estadisticas', require('./routes/estadisticaRoutes'));
 app.use('/api/reportes', require('./routes/reporteRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/notificaciones', require('./routes/notificacionRoutes'));
 
 // Ruta de prueba (Health Check)
 app.get('/', (req, res) => {

@@ -1,44 +1,42 @@
-const { NotificacionPaseVencido, Pase, Vehiculo, Usuario } = require('../models');
+const { Notificacion } = require('../models');
 
-// GET: Ver alertas pendientes
-exports.getPendientes = async (req, res) => {
+// Obtener mis notificaciones
+exports.obtenerMisNotificaciones = async (req, res) => {
   try {
-    const notificaciones = await NotificacionPaseVencido.findAll({
-      where: { revisada: false },
-      include: [
-        {
-          model: Pase,
-          as: 'pase',
-          include: [
-            {
-              model: Vehiculo,
-              as: 'vehiculo',
-              include: [{ model: Usuario, as: 'usuario' }]
-            }
-          ]
-        }
-      ],
-      order: [['fecha_hora_notificacion', 'DESC']]
+    const notificaciones = await Notificacion.findAll({
+      where: { id_usuario: req.user.id },
+      order: [['fecha_creacion', 'DESC']],
+      limit: 100 // Traer solo las últimas 50
     });
     res.json(notificaciones);
   } catch (error) {
-    res.status(500).json({ error: 'Error obteniendo notificaciones' });
+    res.status(500).json({ error: 'Error al obtener notificaciones' });
   }
 };
 
-// PUT: Marcar como revisada
-exports.marcarRevisada = async (req, res) => {
+// Marcar como leída
+exports.marcarLeida = async (req, res) => {
   try {
     const { id } = req.params;
-    const id_admin = req.user.id;
-
-    await NotificacionPaseVencido.update(
-      { revisada: true, id_admin_reviso: id_admin },
-      { where: { id_notificacion: id } }
+    await Notificacion.update(
+      { leida: true },
+      { where: { id_notificacion: id, id_usuario: req.user.id } }
     );
-
-    res.json({ mensaje: 'Notificación marcada como revisada.' });
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Error actualizando notificación' });
+    res.status(500).json({ error: 'Error al actualizar' });
   }
 };
+
+// Marcar TODAS como leídas
+exports.marcarTodasLeidas = async (req, res) => {
+    try {
+      await Notificacion.update(
+        { leida: true },
+        { where: { id_usuario: req.user.id, leida: false } }
+      );
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Error al actualizar todo' });
+    }
+  };

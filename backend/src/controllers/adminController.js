@@ -1,5 +1,5 @@
-const { Usuario, Vehiculo } = require('../models');
-
+const { Usuario, Vehiculo, Reporte, Acceso } = require('../models');
+const { sequelize } = require('../config/database');
 // Listar todos los usuarios
 exports.getAllUsuarios = async (req, res) => {
   try {
@@ -46,4 +46,31 @@ exports.getAllVehiculos = async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Error obteniendo vehículos' });
   }
+};
+
+exports.obtenerEstadisticas = async (req, res) => {
+  try {
+    // Ejemplo rápido de estadísticas
+    const totalUsuarios = await Usuario.count();
+    const totalVehiculos = await Vehiculo.count();
+    const reportesPendientes = await Reporte.count({ where: { estado: 'nuevo' } });
+    
+    res.json({
+      usuarios: totalUsuarios,
+      vehiculos: totalVehiculos,
+      reportes_pendientes: reportesPendientes
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener estadísticas' });
+  }
+};
+
+// Si tienes otras funciones en las rutas, agrégalas aquí vacías para que no crashee
+exports.obtenerMapa = async (req, res) => {
+    res.json({ mensaje: "Mapa pendiente" });
+};
+
+exports.obtenerAlertas = async (req, res) => {
+    res.json({ mensaje: "Alertas pendientes" });
 };
