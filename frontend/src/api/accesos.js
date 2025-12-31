@@ -11,3 +11,8 @@ export const registrarMovimiento = async (datos) => {
   const response = await api.post('/accesos/registrar', datos);
   return response.data;
 };
+
+export const obtenerHistorialAccesos = async () => {
+  const response = await api.get('/accesos/historial');
+  return response.data;
+};

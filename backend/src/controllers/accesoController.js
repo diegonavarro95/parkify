@@ -120,3 +120,67 @@ exports.registrarMovimiento = async (req, res) => {
     res.status(500).json({ error: 'Error al registrar.' });
   }
 };
+
+exports.obtenerHistorial = async (req, res) => {
+  try {
+    // Consulta corregida para estructura basada en EVENTOS
+    const accesos = await sequelize.query(`
+      SELECT 
+        a.id_acceso,
+        a.fecha_hora as fecha_hora_entrada, -- Renombramos para el frontend
+        a.id_cajon_moto,
+        
+        -- SUBCONSULTA MÁGICA: Busca la salida correspondiente a esta entrada
+        (
+            SELECT fecha_hora 
+            FROM accesos salida 
+            WHERE salida.id_pase = a.id_pase 
+            AND salida.tipo = 'salida' 
+            AND salida.fecha_hora > a.fecha_hora 
+            ORDER BY salida.fecha_hora ASC 
+            LIMIT 1
+        ) as fecha_hora_salida,
+
+        -- Datos del Vehículo
+        v.placas,
+        v.marca,
+        v.modelo,
+        v.color,
+        v.tipo as tipo_vehiculo,
+        v.foto_documento_validacion as foto_vehiculo,
+
+        -- Datos del Conductor
+        u.nombre_completo as conductor,
+        u.tipo_usuario, 
+        u.rol,
+        u.correo_electronico,
+
+        -- Datos del Pase
+        p.fecha_vencimiento,
+        p.estado as estado_pase,
+
+        -- Guardia (La columna real es id_admin_guardia)
+        g.nombre_completo as guardia_entrada
+
+      FROM accesos a
+      JOIN pases p ON a.id_pase = p.id_pase
+      JOIN vehiculos v ON p.id_vehiculo = v.id_vehiculo
+      JOIN usuarios u ON v.id_usuario = u.id_usuario
+      LEFT JOIN usuarios g ON a.id_admin_guardia = g.id_usuario
+
+      -- FILTRO CLAVE: Solo traemos las filas que son 'entrada'
+      WHERE a.tipo = 'entrada'
+
+      ORDER BY a.fecha_hora DESC
+      LIMIT 200; 
+    `, {
+      type: QueryTypes.SELECT
+    });
+
+    res.json(accesos);
+
+  } catch (error) {
+    console.error("Error obteniendo historial:", error);
+    res.status(500).json({ error: 'Error al obtener historial de accesos.' });
+  }
+};

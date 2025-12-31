@@ -12,4 +12,6 @@ router.post('/validar', accesoController.validarAcceso);
 // 2. Confirmar y guardar en BD
 router.post('/registrar', accesoController.registrarMovimiento);
 
+router.get('/historial', accesoController.obtenerHistorial);
+
 module.exports = router;
