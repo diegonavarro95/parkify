@@ -27,3 +27,19 @@ export const crearReporte = async (datos) => {
   
   return response.data;
 };
+
+export const obtenerTodosReportes = async () => {
+  const response = await api.get('/reportes/todos');
+  return response.data;
+};
+
+export const atenderReporte = async (id, datos) => {
+  // datos debe ser { estado: 'atendido', comentario_admin: '...' }
+  const response = await api.put(`/reportes/${id}/atender`, datos);
+  return response.data;
+};
+
+export const eliminarReporte = async (id) => {
+  const response = await api.delete(`/reportes/${id}`);
+  return response.data;
+};

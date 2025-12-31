@@ -12,5 +12,6 @@ export const MENU_ITEMS = [
   { label: 'Accesos', path: '/admin/accesos', icon: ShieldCheck, role: 'admin_guardia' },
   { label: 'Mapa Motos', path: '/admin/mapa', icon: Car, role: 'admin_guardia' },
   { label: 'Estadísticas', path: '/admin/estadisticas', icon: BarChart3, role: 'admin_guardia' },
+  { label: 'Gestión Reportes', path: '/admin/reportes', icon: FileText, role: 'admin_guardia' },
   { label: 'Notificaciones', path: '/admin/notificaciones', icon: Bell, role: 'admin_guardia' }
 ];

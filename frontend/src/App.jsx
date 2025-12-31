@@ -13,6 +13,7 @@ import MisPases from './pages/pases/MisPases';
 import Escaner from './pages/admin/Escaner';
 import MisReportes from './pages/reportes/MisReportes';
 import Notificaciones from './pages/admin/Notificaciones';
+import GestionReportes from './pages/admin/GestionReportes';
 
 // Componente para proteger rutas privadas
 const PrivateRoute = ({ children }) => {
@@ -59,6 +60,7 @@ function App() {
             {/* --- RUTAS DE ADMINISTRACIÓN / GUARDIA --- */}
             <Route path="admin/escaner" element={<Escaner />} />
             <Route path="admin/notificaciones" element={<Notificaciones/>} />
+            <Route path="admin/reportes" element={<GestionReportes />} />
           </Route>
 
           {/* Manejo de 404 - Redirigir al inicio */}

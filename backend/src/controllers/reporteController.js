@@ -129,3 +129,61 @@ exports.actualizarEstado = async (req, res) => {
     res.status(500).json({ error: 'Error actualizando reporte' });
   }
 };
+
+// 1. Obtener TODOS los reportes (Solo Admin)
+exports.obtenerTodosLosReportes = async (req, res) => {
+  try {
+    const reportes = await Reporte.findAll({
+      // Incluimos quién lo reportó para saber nombre y datos
+      include: [
+        { 
+          model: Usuario, 
+          as: 'usuario', 
+          attributes: ['id_usuario', 'nombre_completo', 'email', 'rol'] 
+        }
+      ],
+      order: [['fecha_envio', 'DESC']]
+    });
+    res.json(reportes);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener reportes' });
+  }
+};
+
+// 2. Atender Reporte (Cambiar estado y agregar respuesta)
+exports.atenderReporte = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado, comentario_admin } = req.body;
+    const id_admin = req.user.id; // El admin que está logueado
+
+    const reporte = await Reporte.findByPk(id);
+    if (!reporte) return res.status(404).json({ error: 'Reporte no encontrado' });
+
+    await reporte.update({
+      estado: estado, // 'en_revision', 'atendido', 'cerrado'
+      comentario_admin: comentario_admin,
+      id_admin_atendio: id_admin,
+      fecha_atencion: new Date()
+    });
+
+    // Opcional: Aquí podrías crear una Notificación para el alumno avisando que le respondieron
+    
+    res.json({ mensaje: 'Reporte actualizado', reporte });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar reporte' });
+  }
+};
+
+// 3. Eliminar Reporte
+exports.eliminarReporte = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Reporte.destroy({ where: { id_reporte: id } });
+    res.json({ mensaje: 'Reporte eliminado' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar' });
+  }
+};
