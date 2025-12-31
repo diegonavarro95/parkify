@@ -1,23 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Bell, Check, FileText, ShieldAlert, Info } from 'lucide-react';
-import io from 'socket.io-client';
 import api from '../../api/axios';
 import Button from '../../components/common/Button';
 import toast from 'react-hot-toast';
-import { useAuth } from '../../context/AuthContext'; // <--- IMPORTANTE
-
-// Creamos la conexión para esta página
-const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
-    transports: ['websocket'],
-    withCredentials: true
-});
+import { useAuth } from '../../context/AuthContext';
+// 👇 1. USAR EL HOOK DEL CONTEXTO
+import { useSocket } from '../../context/useSocket';
 
 const Notificaciones = () => {
   const [notificaciones, setNotificaciones] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth(); // <--- Necesitamos saber quién es el usuario
+  const { user } = useAuth();
+  const { socket } = useSocket(); // 👇 2. OBTENER EL SOCKET AQUÍ
 
-  // 1. Cargar historial de la BD
   const cargarNotificaciones = async () => {
     try {
       const res = await api.get('/notificaciones');
@@ -32,54 +27,41 @@ const Notificaciones = () => {
   useEffect(() => {
     cargarNotificaciones();
 
-    // 2. CONECTAR Y ESCUCHAR EN TIEMPO REAL
-    socket.on('connect', () => {
-        // En cuanto conecte, nos identificamos para entrar a la "sala_admins"
-        // Si no hacemos esto, este componente es "anónimo" y no recibe nada.
-        if (user && user.rol === 'admin_guardia') {
-            console.log("📡 Lista de Notificaciones: Identificándose...");
-            socket.emit('identificarse', { 
-                id: user.id_usuario, 
-                nombre: user.nombre_completo, 
-                rol: user.rol 
-            });
-        }
-    });
+    // 👇 3. LÓGICA DE ESCUCHA SEGURA
+    if (!socket) return; // Esperar a que el socket exista
 
-    socket.on('nuevo_reporte_creado', (data) => {
-      console.log('⬇️ Agregando a la lista:', data);
+    const handleNuevoReporte = (data) => {
+      console.log('⚡ ACTUALIZANDO LISTA:', data);
 
-      // Creamos el objeto visualmente idéntico al de la BD
       const nuevaNotificacion = {
-        id_notificacion: Date.now(), // ID temporal único
+        id_notificacion: Date.now(),
         id_usuario: user?.id_usuario,
         titulo: 'Nuevo Reporte de Incidencia',
         mensaje: data.mensaje || `Un usuario ha reportado: "${data.asunto}"`,
         tipo: 'reporte',
         leida: false,
-        fecha_creacion: new Date().toISOString() // Fecha actual
+        fecha_creacion: new Date().toISOString()
       };
 
-      // Agregamos al principio de la lista (Spread operator)
       setNotificaciones((prev) => [nuevaNotificacion, ...prev]);
-    });
+    };
+
+    socket.on('nuevo_reporte_creado', handleNuevoReporte);
 
     return () => {
-      socket.off('connect');
-      socket.off('nuevo_reporte_creado');
+      socket.off('nuevo_reporte_creado', handleNuevoReporte);
     };
-  }, [user]); // <--- Se re-ejecuta si el usuario carga
+  }, [socket, user]); // Se ejecuta cuando el socket está listo
 
-  // --- Funciones de interacción (Iguales que antes) ---
+  // ... (El resto del código: marcarComoLeida, marcarTodoLeido, getIcon, return... ES IGUAL)
+  
+  // SOLO COPIA EL CONTENIDO DE LAS FUNCIONES DE ABAJO SI YA LAS TIENES
+  // ...
   const marcarComoLeida = async (id) => {
     try {
       await api.put(`/notificaciones/${id}/leer`);
-      setNotificaciones(prev => 
-        prev.map(n => n.id_notificacion === id ? { ...n, leida: true } : n)
-      );
-    } catch (error) {
-      console.error(error);
-    }
+      setNotificaciones(prev => prev.map(n => n.id_notificacion === id ? { ...n, leida: true } : n));
+    } catch (error) { console.error(error); }
   };
 
   const marcarTodoLeido = async () => {
@@ -87,9 +69,7 @@ const Notificaciones = () => {
           await api.put('/notificaciones/leer-todas');
           setNotificaciones(prev => prev.map(n => ({...n, leida: true})));
           toast.success("Todo marcado como leído");
-      } catch (error) {
-          toast.error("Error al actualizar");
-      }
+      } catch (error) { toast.error("Error al actualizar"); }
   }
 
   const getIcon = (tipo) => {
@@ -107,18 +87,14 @@ const Notificaciones = () => {
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Centro de Notificaciones</h1>
             <p className="text-slate-500">Historial de alertas y avisos del sistema.</p>
         </div>
-        <Button variant="outline" onClick={marcarTodoLeido} icon={Check}>
-            Marcar todo como leído
-        </Button>
+        <Button variant="outline" onClick={marcarTodoLeido} icon={Check}>Marcar todo leído</Button>
       </div>
 
       {loading ? (
         <div className="text-center py-10 animate-pulse text-slate-400">Cargando historial...</div>
       ) : notificaciones.length === 0 ? (
         <div className="text-center py-20 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="bg-slate-50 dark:bg-slate-800 inline-block p-4 rounded-full mb-4">
-                <Bell size={40} className="text-slate-300" />
-            </div>
+            <Bell size={40} className="text-slate-300 mx-auto mb-4" />
             <p className="text-slate-500">No tienes notificaciones recientes.</p>
         </div>
       ) : (
@@ -137,21 +113,15 @@ const Notificaciones = () => {
                 {!notif.leida && (
                     <span className="absolute top-4 right-4 w-3 h-3 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span>
                 )}
-
                 <div className="mt-1 bg-white dark:bg-slate-800 p-2 rounded-full shadow-sm border border-slate-100 dark:border-slate-700">
                     {getIcon(notif.tipo)}
                 </div>
-
                 <div className="flex-1">
                     <h3 className={`font-bold text-base ${notif.leida ? 'text-slate-700 dark:text-slate-300' : 'text-slate-900 dark:text-white'}`}>
                         {notif.titulo}
                     </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                        {notif.mensaje}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-2 font-medium">
-                        {new Date(notif.fecha_creacion).toLocaleString()}
-                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">{notif.mensaje}</p>
+                    <p className="text-xs text-slate-400 mt-2 font-medium">{new Date(notif.fecha_creacion).toLocaleString()}</p>
                 </div>
             </div>
           ))}

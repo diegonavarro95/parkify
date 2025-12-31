@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import MainLayout from './components/layout/MainLayout';
+import { SocketProvider } from './context/SocketContext';
 
 // Importar páginas reales
 import LoginPage from './pages/auth/LoginPage';
@@ -29,6 +30,7 @@ const PrivateRoute = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
+      <SocketProvider>
       <BrowserRouter>
         {/* Configuración de las notificaciones */}
         <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
@@ -63,6 +65,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </SocketProvider>
     </AuthProvider>
   );
 }
