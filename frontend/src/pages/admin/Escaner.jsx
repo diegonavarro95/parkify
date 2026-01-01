@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Html5Qrcode } from 'html5-qrcode'; 
 import { Shield, RefreshCw, CheckCircle, ArrowRight, User, MapPin, Bike, Car, Camera, Image as ImageIcon, X, ZoomIn } from 'lucide-react';
 import QRScanner from '../../components/scanner/QRScanner';
-import { validarAcceso, registrarMovimiento } from '../../api/accesos';
+// 👇 Importamos obtenerMapaMotos para traer los cajones reales
+import { validarAcceso, registrarMovimiento, obtenerMapaMotos } from '../../api/accesos';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 
@@ -13,10 +14,28 @@ const Escaner = () => {
   const [scanResult, setScanResult] = useState(null);
   const [selectedCajon, setSelectedCajon] = useState(null);
   
+  // Estado para guardar los cajones reales traídos de la BD
+  const [cajonesDisponibles, setCajonesDisponibles] = useState([]);
+
   // Estado para el visor de imagen (Lightbox)
   const [imageModalOpen, setImageModalOpen] = useState(false);
 
   const fileInputRef = useRef(null);
+
+  // --- CARGAR CAJONES AL INICIAR ---
+  const cargarCajones = async () => {
+    try {
+        const data = await obtenerMapaMotos();
+        // Solo nos interesan los disponibles para asignarlos
+        setCajonesDisponibles(data.filter(c => c.estado === 'disponible'));
+    } catch (error) {
+        console.error("Error cargando cajones", error);
+    }
+  };
+
+  useEffect(() => {
+    cargarCajones();
+  }, []);
 
   // --- LÓGICA DE PROCESAMIENTO ---
   const procesarCodigo = async (decodedText) => {
@@ -25,6 +44,9 @@ const Escaner = () => {
       setLoading(true);
       setScanResult(null);
       setSelectedCajon(null);
+      
+      // Actualizamos cajones por si alguien ocupó uno mientras escaneábamos
+      cargarCajones(); 
 
       if (fileInputRef.current) fileInputRef.current.value = '';
 
@@ -85,11 +107,12 @@ const Escaner = () => {
       await registrarMovimiento({
         id_vehiculo: vehiculo.id_vehiculo,
         tipo_movimiento: accionSugerida,
-        id_cajon_moto: selectedCajon
+        id_cajon_moto: selectedCajon // Enviamos el ID real del cajón
       });
       toast.success(`${accionSugerida.toUpperCase()} ACEPTADA`);
       setScanResult(null);
       setSelectedCajon(null);
+      cargarCajones(); // Recargar mapa para la siguiente
     } catch (error) {
       toast.error(error.response?.data?.error || 'Error al registrar');
     } finally {
@@ -101,6 +124,10 @@ const Escaner = () => {
     setScanResult(null);
     setCameraActive(false);
   };
+
+  // Filtros para mostrar ordenado
+  const cajonesA = cajonesDisponibles.filter(c => c.zona === 'A');
+  const cajonesB = cajonesDisponibles.filter(c => c.zona === 'B');
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8 pb-32 relative">
@@ -180,7 +207,7 @@ const Escaner = () => {
 
                   <div className="flex items-start gap-5">
                       
-                      {/* --- FOTO / ICONO (CON LIGHTBOX) --- */}
+                      {/* --- FOTO / ICONO --- */}
                       <div 
                         className={`w-24 h-24 bg-slate-100 rounded-xl overflow-hidden shadow-inner flex items-center justify-center border border-slate-200 relative group ${scanResult.vehiculo.foto_url ? 'cursor-zoom-in' : ''}`}
                         onClick={() => scanResult.vehiculo.foto_url && setImageModalOpen(true)}
@@ -192,7 +219,6 @@ const Escaner = () => {
                                     alt="Vehículo" 
                                     className="w-full h-full object-cover transition-transform group-hover:scale-110"
                                 />
-                                {/* Overlay al hacer hover */}
                                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                     <ZoomIn className="text-white drop-shadow-md" size={24} />
                                 </div>
@@ -220,19 +246,62 @@ const Escaner = () => {
                       </div>
                   </div>
 
-                  {/* Selector Cajones */}
+                  {/* SELECCIÓN DE CAJÓN (DINÁMICO DESDE BD) */}
                   {(scanResult.vehiculo.tipo.toLowerCase().includes('moto')) && scanResult.accionSugerida === 'entrada' && (
                      <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-5 dark:bg-yellow-900/10 dark:border-yellow-700">
                         <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-500 font-bold mb-4 text-lg">
-                           <MapPin /> Asignar Cajón Obligatorio
+                           <MapPin /> Asignar Cajón
                         </div>
-                        <div className="grid grid-cols-5 gap-3">
-                           {[...Array(15)].map((_, i) => (
-                                <button key={i} onClick={() => setSelectedCajon(i + 1)} className={`h-12 rounded-lg font-bold text-lg transition-all shadow-sm ${selectedCajon === i + 1 ? 'bg-brand-600 text-white scale-110 shadow-brand-200 ring-2 ring-brand-300' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>
-                                  {i + 1}
-                                </button>
-                           ))}
-                        </div>
+                        
+                        {cajonesDisponibles.length === 0 ? (
+                           <p className="text-center text-red-500 font-bold">¡NO HAY CAJONES DISPONIBLES!</p>
+                        ) : (
+                           <div className="space-y-3">
+                               {/* Fila A */}
+                               {cajonesA.length > 0 && (
+                                 <div>
+                                   <p className="text-xs font-bold text-slate-400 mb-1">FILA A</p>
+                                   <div className="flex flex-wrap gap-2">
+                                     {cajonesA.map((cajon) => (
+                                        <button 
+                                          key={cajon.id_cajon} 
+                                          onClick={() => setSelectedCajon(cajon.id_cajon)} 
+                                          className={`px-3 py-2 rounded-lg font-bold text-sm transition-all shadow-sm ${
+                                            selectedCajon === cajon.id_cajon 
+                                            ? 'bg-brand-600 text-white scale-110 shadow-brand-200 ring-2 ring-brand-300' 
+                                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                                          }`}
+                                        >
+                                          {cajon.identificador}
+                                        </button>
+                                     ))}
+                                   </div>
+                                 </div>
+                               )}
+
+                               {/* Fila B */}
+                               {cajonesB.length > 0 && (
+                                 <div>
+                                   <p className="text-xs font-bold text-slate-400 mb-1">FILA B</p>
+                                   <div className="flex flex-wrap gap-2">
+                                     {cajonesB.map((cajon) => (
+                                        <button 
+                                          key={cajon.id_cajon} 
+                                          onClick={() => setSelectedCajon(cajon.id_cajon)} 
+                                          className={`px-3 py-2 rounded-lg font-bold text-sm transition-all shadow-sm ${
+                                            selectedCajon === cajon.id_cajon 
+                                            ? 'bg-brand-600 text-white scale-110 shadow-brand-200 ring-2 ring-brand-300' 
+                                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                                          }`}
+                                        >
+                                          {cajon.identificador}
+                                        </button>
+                                     ))}
+                                   </div>
+                                 </div>
+                               )}
+                           </div>
+                        )}
                      </div>
                   )}
 
@@ -259,17 +328,15 @@ const Escaner = () => {
             >
                 <X size={32} />
             </button>
-            
             <img 
                 src={scanResult.vehiculo.foto_url} 
-                alt="Zoom Vehículo" 
+                alt="Zoom" 
                 className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-scale-in select-none"
-                onClick={(e) => e.stopPropagation()} // Para que no se cierre si das click a la imagen
+                onClick={(e) => e.stopPropagation()}
             />
         </div>
       )}
 
-      {/* Div auxiliar */}
       <div id="reader-hidden" style={{ position: 'absolute', top: 0, left: 0, width: '10px', height: '10px', zIndex: -1, opacity: 0, overflow: 'hidden' }}></div>
     </div>
   );

@@ -15,6 +15,7 @@ import MisReportes from './pages/reportes/MisReportes';
 import Notificaciones from './pages/admin/Notificaciones';
 import GestionReportes from './pages/admin/GestionReportes';
 import Accesos from './pages/admin/HistorialAccesos';
+import MapaMotos from './pages/admin/MapaMotos';
 
 // Componente para proteger rutas privadas
 const PrivateRoute = ({ children }) => {
@@ -63,6 +64,7 @@ function App() {
             <Route path="admin/notificaciones" element={<Notificaciones/>} />
             <Route path="admin/reportes" element={<GestionReportes/>} />
             <Route path="admin/accesos" element={<Accesos/>} />
+            <Route path="admin/mapa" element={<MapaMotos/>} />
           </Route>
 
           {/* Manejo de 404 - Redirigir al inicio */}

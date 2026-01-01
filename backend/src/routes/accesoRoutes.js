@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const accesoController = require('../controllers/accesoController');
 const verificarToken = require('../middlewares/authMiddleware');
-
+const cajonController = require('../controllers/cajonController');
 // Middleware global de seguridad
 router.use(verificarToken);
 
@@ -13,5 +13,7 @@ router.post('/validar', accesoController.validarAcceso);
 router.post('/registrar', accesoController.registrarMovimiento);
 
 router.get('/historial', accesoController.obtenerHistorial);
+
+router.get('/mapa-motos', cajonController.obtenerMapa);
 
 module.exports = router;

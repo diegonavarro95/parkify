@@ -16,3 +16,8 @@ export const obtenerHistorialAccesos = async () => {
   const response = await api.get('/accesos/historial');
   return response.data;
 };
+
+export const obtenerMapaMotos = async () => {
+  const response = await api.get('/accesos/mapa-motos');
+  return response.data;
+};
