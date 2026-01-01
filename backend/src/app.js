@@ -22,8 +22,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
 app.use('/api/pases', require('./routes/paseRoutes'));
 app.use('/api/accesos', require('./routes/accesoRoutes'));
-app.use('/api/estadisticas', require('./routes/estadisticaRoutes'));
+app.use('/api/estadisticas', require('./routes/estadisticasRoutes'));
 app.use('/api/reportes', require('./routes/reporteRoutes'));
+app.use('/api/usuarios',require('./routes/usuarioRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/notificaciones', require('./routes/notificacionRoutes'));
 

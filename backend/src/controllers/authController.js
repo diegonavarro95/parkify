@@ -67,12 +67,14 @@ exports.login = async (req, res) => {
     // 3. Responder con el Token y los datos del usuario
     res.json({
       mensaje: 'Login exitoso',
-      token: data.session.access_token, // JWT de Supabase
+      token: data.session.access_token,
       usuario: {
-        id: usuarioDB.id_usuario,
-        nombre: usuarioDB.nombre_completo,
+        id_usuario: usuarioDB.id_usuario,
+        // 👇 AQUÍ ESTÁ EL CAMBIO: Ahora se llama 'nombre_completo'
+        nombre_completo: usuarioDB.nombre_completo, 
+        correo_electronico: usuarioDB.correo_electronico,
         rol: usuarioDB.rol,
-        tipo: usuarioDB.tipo_usuario
+        tipo_usuario: usuarioDB.tipo_usuario
       }
     });
 

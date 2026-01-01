@@ -7,7 +7,7 @@ import { SocketProvider } from './context/SocketContext';
 // Importar páginas reales
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
-import Dashboard from './pages/dashboard/Dashboard';
+import Dashboard from './pages/user/Dashboard';
 import MisVehiculos from './pages/vehiculos/MisVehiculos'; 
 import MisPases from './pages/pases/MisPases';
 import Escaner from './pages/admin/Escaner';
@@ -16,6 +16,7 @@ import Notificaciones from './pages/admin/Notificaciones';
 import GestionReportes from './pages/admin/GestionReportes';
 import Accesos from './pages/admin/HistorialAccesos';
 import MapaMotos from './pages/admin/MapaMotos';
+import Estadisticas from './pages/admin/Estadisticas';
 
 // Componente para proteger rutas privadas
 const PrivateRoute = ({ children }) => {
@@ -65,6 +66,7 @@ function App() {
             <Route path="admin/reportes" element={<GestionReportes/>} />
             <Route path="admin/accesos" element={<Accesos/>} />
             <Route path="admin/mapa" element={<MapaMotos/>} />
+            <Route path="admin/estadisticas" element={<Estadisticas/>} />
           </Route>
 
           {/* Manejo de 404 - Redirigir al inicio */}
