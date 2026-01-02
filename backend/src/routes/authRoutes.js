@@ -1,11 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
+const multer = require('multer');
 
-// POST http://localhost:5000/api/auth/register
-router.post('/register', authController.register);
+// --- CONFIGURACIÓN DE MULTER (En Memoria) ---
+// Guardamos el archivo en RAM temporalmente para subirlo a Supabase
+const storage = multer.memoryStorage();
 
-// POST http://localhost:5000/api/auth/login
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 } // Límite de 5MB por archivo (opcional)
+});
+
+// --- RUTAS ---
+
+// 1. Registro: Recibe 'documento_validacion'
+router.post('/register', upload.single('documento_validacion'), authController.register);
+
+// 2. Login
 router.post('/login', authController.login);
 
-module.exports = router;
+// 3. Recuperación de Contraseña
+router.post('/forgot-password', authController.forgotPassword);
+router.post('/reset-password/:token', authController.resetPassword);
+
+module.exports = router; 

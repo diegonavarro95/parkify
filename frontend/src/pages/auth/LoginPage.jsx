@@ -1,31 +1,42 @@
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogIn, User, Lock } from 'lucide-react';
-import toast from 'react-hot-toast'; // Feedback inmediato
+import { LogIn, User, Lock, Eye, EyeOff } from 'lucide-react';
+import toast from 'react-hot-toast'; 
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import img1 from '../../imgs/fondo1.jpg'; 
+import img2 from '../../imgs/fondo2.jpg';
+import img3 from '../../imgs/fondo3.jpg';
+// Imágenes para el carrusel
+const CAROUSEL_IMAGES = [img1, img2, img3];
 
 const LoginPage = () => {
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  // Estados para UI
+  const [showPassword, setShowPassword] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Lógica del Carrusel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % CAROUSEL_IMAGES.length);
+    }, 5000); // Cambia cada 5 segundos
+    return () => clearInterval(interval);
+  }, []);
+
   const onSubmit = async (data) => {
     try {
-      // 1. Petición al Backend
       const response = await api.post('/auth/login', data);
-      
-      // 2. Guardar sesión
       login(response.data.usuario, response.data.token);
-      
-      // 3. Feedback y Redirección
-      toast.success(`Bienvenido, ${response.data.usuario.nombre}`);
+      toast.success(`Bienvenido, ${response.data.usuario.nombre_completo}`); // Asegúrate de que el back envíe nombre_completo
       navigate('/'); 
-      
     } catch (error) {
-      // Manejo de errores (Heurística: Mensajes claros)
       console.error(error);
       const msg = error.response?.data?.error || 'Error al iniciar sesión';
       toast.error(msg);
@@ -40,9 +51,12 @@ const LoginPage = () => {
         <div className="mx-auto w-full max-w-sm lg:w-96">
           
           <div className="mb-10">
-            <h2 className="mt-6 text-3xl font-extrabold text-slate-900 dark:text-white">
-              Parkify <span className="text-brand-600">ESCOM</span>
-            </h2>
+            <div className="flex items-center gap-3 mb-2">
+                <img src="/parkify.png" alt="Logo" className="w-12 h-12 object-contain" />
+                <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  Parkify <span className="text-brand-600">ESCOM</span>
+                </h2>
+            </div>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
               Gestión inteligente de estacionamiento
             </p>
@@ -61,25 +75,34 @@ const LoginPage = () => {
                   required: "El correo es obligatorio",
                   pattern: {
                     value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: "Correo inválido"
+                    message: "Debe contener un @"
                   }
                 })}
               />
 
-              <div className="space-y-1">
+              <div className="space-y-1 relative">
                 <Input
                   label="Contraseña"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   icon={Lock}
                   error={errors.password?.message}
                   {...register("password", { required: "La contraseña es obligatoria" })}
                 />
-                <div className="flex items-center justify-end">
+                {/* Botón de Ojo Flotante */}
+                <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-[34px] text-slate-400 hover:text-brand-600 transition-colors"
+                >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+
+                <div className="flex items-center justify-end pt-1">
                   <div className="text-sm">
-                    <a href="#" className="font-medium text-brand-600 hover:text-brand-500">
+                    <Link to="/recuperar-password" className="font-medium text-brand-600 hover:text-brand-500">
                       ¿Olvidaste tu contraseña?
-                    </a>
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -106,17 +129,23 @@ const LoginPage = () => {
         </div>
       </div>
 
-      {/* Lado Derecho: Imagen Decorativa (Oculto en móvil) */}
-      <div className="hidden lg:block relative w-0 flex-1">
-        <img
-          className="absolute inset-0 h-full w-full object-cover"
-          src="https://images.unsplash.com/photo-1590674899505-1c5c412719a5?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80"
-          alt="Estacionamiento moderno"
-        />
+      {/* Lado Derecho: Carrusel */}
+      <div className="hidden lg:block relative w-0 flex-1 overflow-hidden bg-slate-900">
+        {CAROUSEL_IMAGES.map((img, index) => (
+            <img
+                key={index}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out ${
+                    index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+                }`}
+                src={img}
+                alt={`Slide ${index}`}
+            />
+        ))}
+        
         <div className="absolute inset-0 bg-brand-900/40 mix-blend-multiply" />
-        <div className="absolute bottom-0 left-0 p-12 text-white">
-          <blockquote className="font-medium text-xl">
-            "La tecnología al servicio de la comunidad politécnica."
+        <div className="absolute bottom-0 left-0 p-12 text-white z-10">
+          <blockquote className="font-medium text-2xl italic border-l-4 border-brand-500 pl-4">
+            "La técnica al servicio de la patria"
           </blockquote>
         </div>
       </div>

@@ -48,6 +48,18 @@ const Usuario = sequelize.define('Usuario', {
   fecha_registro: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
+  },
+  documento_validacion_url: {
+    type: DataTypes.STRING, // o TEXT
+    allowNull: true
+  },
+  reset_password_token: {
+    type: DataTypes.STRING, // o TEXT
+    allowNull: true
+  },
+  reset_password_expires: {
+    type: DataTypes.BIGINT,
+    allowNull: true
   }
 }, {
   tableName: 'usuarios', // Nombre exacto en la BD

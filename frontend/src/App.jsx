@@ -7,6 +7,8 @@ import { SocketProvider } from './context/SocketContext';
 // Importar páginas reales
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import RecuperarPassword from './pages/auth/RecuperarPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 import Dashboard from './pages/user/Dashboard';
 import MisVehiculos from './pages/vehiculos/MisVehiculos'; 
 import MisPases from './pages/pases/MisPases';
@@ -43,6 +45,8 @@ function App() {
           {/* Rutas Públicas */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/recuperar-password" element={<RecuperarPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
 
           {/* Rutas Privadas (Dentro del Layout) */}
           <Route path="/" element={
