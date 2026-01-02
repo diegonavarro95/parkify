@@ -1,27 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react'; // Agregamos useState
 import { Outlet } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Bell } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react'; // Agregamos icono Menu
 import Sidebar from './Sidebar';
-import { useSocket } from '../../context/useSocket';
+import { useSocket } from '../../context/useSocket'; // Tu import original
 
 const MainLayout = () => {
-  // Ya no necesitamos useAuth aquí para el socket, porque el SocketContext ya se encargó de la autenticación.
-  // Solo traemos el socket del contexto.
   const { socket } = useSocket();
+  
+  // 1. Estado para controlar el Sidebar en móvil
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // 1. Si el socket aún no existe (se está conectando), esperamos.
     if (!socket) return;
 
-    // 2. Definimos qué hacer cuando llega una notificación (Mostrar Toast)
     const onNuevoReporte = (data) => {
       console.log("🔔 Alerta Global (Toast) Recibida");
-      
-      // Reproducir sonido (Opcional)
       try { new Audio('/notification.mp3').play().catch(() => {}); } catch (e) {}
 
-      // Mostrar el Toast de react-hot-toast
       toast((t) => (
         <div onClick={() => toast.dismiss(t.id)} className="cursor-pointer flex items-start gap-3">
           <div className="bg-red-100 p-2 rounded-full text-red-600">
@@ -39,23 +35,39 @@ const MainLayout = () => {
       });
     };
 
-    // 3. Empezar a escuchar el evento
     socket.on('nuevo_reporte_creado', onNuevoReporte);
 
-    // 4. Limpieza: Dejar de escuchar si el componente se desmonta (para no duplicar toasts)
     return () => {
       socket.off('nuevo_reporte_creado', onNuevoReporte);
     };
 
-  }, [socket]); // Este efecto se ejecuta cuando el socket esté listo
+  }, [socket]);
 
   return (
-    <div className="flex h-screen bg-slate-100 dark:bg-dark-bg">
-      {/* Sidebar Fija */}
-      <Sidebar />
+    <div className="flex h-screen bg-slate-100 dark:bg-dark-bg overflow-hidden">
+      
+      {/* 2. Pasamos props al Sidebar */}
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Contenido Principal */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="flex-1 flex flex-col h-full relative overflow-hidden">
+        
+        {/* 3. Header Móvil (Solo visible en pantallas pequeñas) */}
+        <header className="lg:hidden bg-white dark:bg-slate-900 border-b border-slate-200 h-16 flex items-center justify-between px-4 shrink-0">
+            <div className="flex items-center gap-2">
+               {/* Logo pequeño en header móvil */}
+               <img src="/parkify.png" alt="Logo" className="w-8 h-8 object-contain"/>
+               <span className="font-black text-brand-600">PARKIFY</span>
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+            >
+              <Menu size={24} />
+            </button>
+        </header>
+
+        {/* Área de Contenido */}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-dark-bg p-4 md:p-8">
           <Outlet />
         </main>
@@ -64,4 +76,4 @@ const MainLayout = () => {
   );
 };
 
-export default MainLayout; 
+export default MainLayout;
