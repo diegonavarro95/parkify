@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Car, Plus, X, Upload, Trash2, Bike, AlertTriangle } from 'lucide-react'; // <--- AlertTriangle Agregado
+import { Car, Plus, X, Upload, Trash2, Bike, AlertTriangle, HelpCircle } from 'lucide-react'; // <--- HelpCircle Agregado
 import toast from 'react-hot-toast';
-import { obtenerMisVehiculos, registrarVehiculo, eliminarVehiculo } from '../../api/vehiculos'; // <--- eliminarVehiculo Agregado
+import { obtenerMisVehiculos, registrarVehiculo, eliminarVehiculo } from '../../api/vehiculos';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -14,9 +14,12 @@ const MisVehiculos = () => {
   const [showForm, setShowForm] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   
+  // Estado para la ayuda visual de placas
+  const [showPlateHelp, setShowPlateHelp] = useState(false);
+
   // Estados para Modales
-  const [selectedVehiculo, setSelectedVehiculo] = useState(null); // Detalle
-  const [vehiculoAEliminar, setVehiculoAEliminar] = useState(null); // Confirmación Borrado
+  const [selectedVehiculo, setSelectedVehiculo] = useState(null);
+  const [vehiculoAEliminar, setVehiculoAEliminar] = useState(null);
 
   const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm();
   const fotoWatch = watch('foto');
@@ -58,18 +61,13 @@ const MisVehiculos = () => {
     }
   };
 
-  // --- NUEVA FUNCIÓN DE ELIMINAR ---
   const confirmarEliminacion = async () => {
     if (!vehiculoAEliminar) return;
-
     try {
       await eliminarVehiculo(vehiculoAEliminar.id_vehiculo);
       toast.success('Vehículo eliminado correctamente');
-      
-      // Actualizar UI
       setVehiculoAEliminar(null);
       cargarVehiculos();
-      
     } catch (error) {
       console.error(error);
       const msg = error.response?.data?.error || 'No se pudo eliminar el vehículo';
@@ -77,11 +75,11 @@ const MisVehiculos = () => {
       setVehiculoAEliminar(null);
     }
   };
-  // ---------------------------------
 
   const limpiarFormulario = () => {
     setShowForm(false);
     setPreviewUrl(null);
+    setShowPlateHelp(false); // Reiniciar ayuda
     reset();
   };
 
@@ -103,7 +101,7 @@ const MisVehiculos = () => {
         )}
       </div>
 
-      {/* Formulario (Sin cambios) */}
+      {/* --- FORMULARIO --- */}
       {showForm && (
         <Card className="animate-slide-up border-brand-200 shadow-brand-100">
           <div className="flex justify-between items-center mb-4 border-b pb-2">
@@ -115,6 +113,8 @@ const MisVehiculos = () => {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              {/* Tipo de Vehículo */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   Tipo de Vehículo
@@ -127,22 +127,73 @@ const MisVehiculos = () => {
                   <option value="motocicleta">Motocicleta</option>
                 </select>
               </div>
-              <Input
-                label="Placas"
-                placeholder="ABC-123-D"
-                className="uppercase"
-                error={errors.placas?.message}
-                {...register("placas", { 
-                  required: "Las placas son obligatorias",
-                  pattern: { value: /^[A-Z0-9-]{6,9}$/, message: "Formato inválido" }
-                })}
-                onInput={(e) => e.target.value = e.target.value.toUpperCase()}
+
+              {/* Placas con Ayuda Visual */}
+              <div className="relative">
+                 <div className="flex items-center gap-2 mb-1.5">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Placas
+                    </label>
+                    <button 
+                        type="button"
+                        onClick={() => setShowPlateHelp(!showPlateHelp)}
+                        className="text-brand-500 hover:text-brand-700 transition-colors"
+                        title="Ver formato de placas"
+                    >
+                        <HelpCircle size={16} />
+                    </button>
+                 </div>
+
+                 {showPlateHelp && (
+                     <div className="absolute z-10 top-8 left-0 w-64 bg-white dark:bg-slate-800 p-3 rounded-lg shadow-xl border border-brand-100 text-xs text-slate-600 dark:text-slate-300 animate-fade-in">
+                        <p className="font-bold text-brand-600 mb-1">Formatos Válidos (CDMX/Edomex):</p>
+                        <ul className="list-disc pl-4 space-y-1">
+                            <li>3 Letras + 3 Números (ej. <strong>ABC-123</strong>)</li>
+                            <li>3 Letras + 4 Números (ej. <strong>MEX-1234</strong>)</li>
+                            <li>Terminación Letra (ej. <strong>ABC-123-A</strong>)</li>
+                        </ul>
+                        <p className="mt-2 italic text-[10px] text-slate-400">Nota: Usualmente no incluyen I, O, Q.</p>
+                     </div>
+                 )}
+
+                 <Input
+                    placeholder="ABC-123"
+                    className="uppercase"
+                    error={errors.placas?.message}
+                    {...register("placas", { 
+                      required: "Las placas son obligatorias",
+                      pattern: { 
+                          // 3 Letras + Guion opcional + 3 o 4 números + Guion opcional + Letra opcional
+                          value: /^[A-Z]{3}-?\d{3,4}(-?[A-Z])?$/, 
+                          message: "Formato inválido (ej. ABC-123 o MEX-1234)" 
+                      }
+                    })}
+                    onInput={(e) => e.target.value = e.target.value.toUpperCase()}
+                  />
+              </div>
+
+              {/* Campos Restantes con Validación Required */}
+              <Input 
+                  label="Marca" 
+                  placeholder="Nissan" 
+                  error={errors.marca?.message} 
+                  {...register("marca", { required: "La marca es requerida" })} 
               />
-              <Input label="Marca" placeholder="Nissan" error={errors.marca?.message} {...register("marca", { required: true })} />
-              <Input label="Modelo" placeholder="Versa" error={errors.modelo?.message} {...register("modelo", { required: true })} />
-              <Input label="Color" placeholder="Rojo" error={errors.color?.message} {...register("color", { required: true })} />
+              <Input 
+                  label="Modelo" 
+                  placeholder="Versa" 
+                  error={errors.modelo?.message} 
+                  {...register("modelo", { required: "El modelo es requerido" })} 
+              />
+              <Input 
+                  label="Color" 
+                  placeholder="Rojo" 
+                  error={errors.color?.message} 
+                  {...register("color", { required: "El color es requerido" })} 
+              />
             </div>
 
+            {/* Foto */}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Foto del Vehículo</label>
               <div className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg transition-colors relative overflow-hidden ${previewUrl ? 'border-brand-500 bg-slate-50' : 'border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800'}`}>
@@ -172,7 +223,7 @@ const MisVehiculos = () => {
         </Card>
       )}
 
-      {/* Lista */}
+      {/* Lista de Vehículos (Sin cambios de lógica) */}
       {loading ? (
         <div className="text-center py-10 text-slate-500">Cargando vehículos...</div>
       ) : vehiculos.length === 0 && !showForm ? (
@@ -214,9 +265,8 @@ const MisVehiculos = () => {
                         variant="ghost" 
                         size="sm" 
                         className="text-slate-400 hover:text-red-500 hover:bg-red-50"
-                        // ACTIVAR MODAL DE CONFIRMACIÓN
                         onClick={(e) => {
-                          e.stopPropagation(); // IMPORTANTE: Para que no se abra el modal de detalle
+                          e.stopPropagation();
                           setVehiculoAEliminar(vehiculo);
                         }}
                       >
@@ -242,7 +292,7 @@ const MisVehiculos = () => {
                {getImagenVehiculo(selectedVehiculo) ? (
                   <img src={getImagenVehiculo(selectedVehiculo)} alt="Vehiculo" className="w-full h-64 object-cover" />
                ) : (
-                 <div className="h-40 flex items-center justify-center text-slate-400">Sin Imagen</div>
+                  <div className="h-40 flex items-center justify-center text-slate-400">Sin Imagen</div>
                )}
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -254,7 +304,6 @@ const MisVehiculos = () => {
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Tipo</p>
                 <p className="text-lg font-medium text-slate-900 dark:text-white capitalize">{selectedVehiculo.tipo}</p>
               </div>
-              {/* Más detalles... */}
               <div><p className="text-xs text-slate-500">Marca</p><p className="font-medium">{selectedVehiculo.marca}</p></div>
               <div><p className="text-xs text-slate-500">Modelo</p><p className="font-medium">{selectedVehiculo.modelo}</p></div>
             </div>
@@ -265,7 +314,7 @@ const MisVehiculos = () => {
         )}
       </Modal>
 
-      {/* --- MODAL 2: CONFIRMACIÓN DE BORRADO (Danger Zone) --- */}
+      {/* --- MODAL 2: CONFIRMACIÓN DE BORRADO --- */}
       <Modal
         isOpen={!!vehiculoAEliminar}
         onClose={() => setVehiculoAEliminar(null)}
