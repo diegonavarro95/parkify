@@ -11,7 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getMiDashboard } from '../../api/usuarios';
 
 import Button from '../../components/common/Button';
-import Modal from '../../components/common/Modal'; // Asegúrate de tener este componente
+import Modal from '../../components/common/Modal'; 
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -68,7 +68,6 @@ const Dashboard = () => {
   }, [data]);
 
   // --- LOGICA DE NOMBRE ---
-  // A veces el nombre viene null, ponemos un fallback
   const nombreUsuario = user?.nombre_completo || 'Usuario'; 
 
   // --- LOGICA LIMITE VEHICULOS ---
@@ -127,10 +126,13 @@ const Dashboard = () => {
                          </div>
                     </div>
                 </div>
+                {/* 👇 CAMBIO AQUÍ: Mostrar Nombre Cajón en vez de ID */}
                 {data.estatusActual.id_cajon_moto && (
                    <div className="mt-6 inline-flex items-center gap-2 bg-black/20 px-4 py-2 rounded-lg">
                       <MapPin size={18} className="text-yellow-400"/>
-                      <span className="font-bold text-sm">Cajón Asignado: M{data.estatusActual.id_cajon_moto}</span>
+                      <span className="font-bold text-sm">
+                          Cajón Asignado: {data.estatusActual.nombre_cajon || `M-${data.estatusActual.id_cajon_moto}`}
+                      </span>
                    </div>
                 )}
             </div>
@@ -188,10 +190,10 @@ const Dashboard = () => {
                   <div className="w-10 h-10 mx-auto bg-orange-50 text-orange-600 rounded-full flex items-center justify-center mb-2 group-hover:bg-orange-600 group-hover:text-white transition-colors">
                       <AlertTriangle size={20}/>
                   </div>
-                  <p className="font-bold text-sm text-slate-700 dark:text-slate-300">Ayuda</p>
+                  <p className="font-bold text-sm text-slate-700 dark:text-slate-300">Reportes</p>
               </div>
 
-              {/* Historial (Ahora Funcional) */}
+              {/* Historial */}
               <div onClick={() => setHistoryModalOpen(true)} className="bg-white dark:bg-dark-card p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-brand-200 transition-all cursor-pointer group text-center">
                   <div className="w-10 h-10 mx-auto bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mb-2 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                       <History size={20}/>

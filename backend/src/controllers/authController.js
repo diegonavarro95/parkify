@@ -100,6 +100,7 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    console.log("➡️ Intentando login en Supabase");
     // A. Login en Supabase
     const { data, error } = await supabase.auth.signInWithPassword({
       email,

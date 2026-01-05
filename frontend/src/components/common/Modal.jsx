@@ -1,45 +1,69 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom'; // 1. Importamos createPortal
 import { X } from 'lucide-react';
-import clsx from 'clsx';
 
 const Modal = ({ isOpen, onClose, title, children }) => {
-  // Cerrar al presionar ESC (Heurística: Control y libertad del usuario)
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === 'Escape') onClose();
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Bloquear el scroll del body cuando el modal está abierto
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
     };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [onClose]);
+  }, [isOpen]);
 
-  if (!isOpen) return null;
+  // Si no está abierto o el componente no se ha montado, no renderizamos nada
+  if (!isOpen || !mounted) return null;
 
-  return (
-    // Overlay oscuro
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity animate-fade-in">
+  // 2. Usamos createPortal para "sacar" el modal del Layout y ponerlo en el body
+  return createPortal(
+    <div 
+      className="fixed inset-0 flex items-center justify-center p-4 sm:p-6"
+      style={{ zIndex: 9999 }} // Z-index máximo garantizado
+    >
       
-      {/* Contenedor del Modal */}
-      <div className="bg-white dark:bg-dark-card w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden transform transition-all animate-slide-up">
+      {/* Overlay (Fondo Negro) */}
+      <div 
+        className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm transition-opacity" 
+        onClick={onClose}
+        aria-hidden="true"
+      ></div>
+
+      {/* Contenido del Modal */}
+      {/* z-index relative para estar encima del overlay */}
+      <div className="relative w-full max-w-lg bg-white dark:bg-dark-card rounded-2xl shadow-2xl transform transition-all animate-scale-in flex flex-col max-h-[90vh] z-10">
         
-        {/* Encabezado */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700 shrink-0">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white line-clamp-1">
             {title}
           </h3>
           <button 
-            onClick={onClose}
-            className="p-1 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 transition-colors"
+            onClick={onClose} 
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Contenido Dinámico */}
-        <div className="p-6">
+        {/* Body (Con Scroll interno si el contenido es largo) */}
+        <div className="p-6 overflow-y-auto custom-scrollbar">
           {children}
         </div>
+
       </div>
-    </div>
+    </div>,
+    document.body // 3. El destino del Portal es el <body>
   );
 };
 

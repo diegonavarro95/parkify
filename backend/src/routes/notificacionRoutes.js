@@ -7,5 +7,6 @@ router.use(verificarToken);
 router.get('/', notifController.obtenerMisNotificaciones);
 router.put('/:id/leer', notifController.marcarLeida);
 router.put('/leer-todas', notifController.marcarTodasLeidas);
+router.delete('/', notifController.eliminarTodas);
 
 module.exports = router;

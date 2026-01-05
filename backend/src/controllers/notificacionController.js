@@ -40,3 +40,17 @@ exports.marcarTodasLeidas = async (req, res) => {
       res.status(500).json({ error: 'Error al actualizar todo' });
     }
   };
+
+  // Eliminar TODAS las notificaciones del usuario
+exports.eliminarTodas = async (req, res) => {
+  try {
+    // Borra todas las filas que pertenezcan a este usuario
+    await Notificacion.destroy({
+      where: { id_usuario: req.user.id }
+    });
+    res.json({ success: true, mensaje: 'Historial limpio' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al eliminar notificaciones' });
+  }
+};

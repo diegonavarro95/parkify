@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogIn, User, Lock, Eye, EyeOff } from 'lucide-react';
+import { LogIn, User, Lock, Eye, EyeOff, AlertTriangle } from 'lucide-react'; // Agregué AlertTriangle para el mensaje
 import toast from 'react-hot-toast'; 
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
@@ -10,6 +10,7 @@ import Button from '../../components/common/Button';
 import img1 from '../../imgs/fondo1.jpg'; 
 import img2 from '../../imgs/fondo2.jpg';
 import img3 from '../../imgs/fondo3.jpg';
+
 // Imágenes para el carrusel
 const CAROUSEL_IMAGES = [img1, img2, img3];
 
@@ -34,12 +35,41 @@ const LoginPage = () => {
     try {
       const response = await api.post('/auth/login', data);
       login(response.data.usuario, response.data.token);
-      toast.success(`Bienvenido, ${response.data.usuario.nombre_completo}`); // Asegúrate de que el back envíe nombre_completo
+      toast.success(`Bienvenido, ${response.data.usuario.nombre_completo}`); 
       navigate('/'); 
     } catch (error) {
-      console.error(error);
-      const msg = error.response?.data?.error || 'Error al iniciar sesión';
-      toast.error(msg);
+      console.error("Error Login:", error); // Para ver en consola
+      
+      // 👇 LÓGICA DE BLOQUEO (403)
+      if (error.response && error.response.status === 403) {
+          // Toast personalizado y persistente para usuario bloqueado
+          toast.error(
+            (t) => (
+                <div className="flex flex-col gap-1" onClick={() => toast.dismiss(t.id)}>
+                    <div className="flex items-center gap-2 font-bold text-base">
+                        <AlertTriangle size={18} /> Acceso Denegado
+                    </div>
+                    <span className="text-sm leading-tight">
+                        Tu cuenta se encuentra <span className="font-bold">bloqueada</span>.
+                        <br/>
+                        Por favor, contacta a un administrador.
+                    </span>
+                </div>
+            ),
+            { 
+                duration: 6000, 
+                style: { 
+                    border: '2px solid #ef4444', 
+                    background: '#FEF2F2',
+                    color: '#991B1B'
+                } 
+            }
+          );
+      } else {
+          // Error genérico (contraseña incorrecta, servidor caído, etc.)
+          const msg = error.response?.data?.error || 'Error al iniciar sesión';
+          toast.error(msg);
+      }
     }
   };
 

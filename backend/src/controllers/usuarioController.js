@@ -1,5 +1,6 @@
 const { sequelize } = require('../config/database');
 const { QueryTypes } = require('sequelize');
+const { Usuario } = require('../models');
 
 exports.getDashboardData = async (req, res) => {
   try {
@@ -19,12 +20,14 @@ exports.getDashboardData = async (req, res) => {
         a.id_acceso,
         a.fecha_hora as hora_entrada,
         a.id_cajon_moto,
+        cm.identificador as nombre_cajon,
         v.placas,
         v.modelo,
         v.foto_documento_validacion as foto
       FROM accesos a
       JOIN pases p ON a.id_pase = p.id_pase
       JOIN vehiculos v ON p.id_vehiculo = v.id_vehiculo
+      LEFT JOIN cajones_motos cm ON a.id_cajon_moto = cm.id_cajon -- 👈 2. AGREGADO: Unión con tabla de cajones
       WHERE v.id_usuario = :id
       AND a.tipo = 'entrada'
       AND NOT EXISTS (
@@ -70,5 +73,31 @@ exports.getDashboardData = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al cargar dashboard' });
+  }
+};
+
+exports.cambiarEstadoUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { activo } = req.body; // true o false
+
+    const usuario = await Usuario.findByPk(id);
+    if (!usuario) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Evitar que un admin se bloquee a sí mismo (opcional pero recomendado)
+    if (usuario.id_usuario === req.user.id) {
+        return res.status(400).json({ error: 'No puedes bloquear tu propia cuenta.' });
+    }
+
+    usuario.activo = activo;
+    await usuario.save();
+
+    res.json({ mensaje: `Usuario ${activo ? 'activado' : 'bloqueado'} correctamente` });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al cambiar estado' });
   }
 };

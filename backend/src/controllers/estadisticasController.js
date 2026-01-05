@@ -92,14 +92,20 @@ exports.getDetalleUsuarios = async (req, res) => {
         u.rol,
         u.correo_electronico,
         u.activo,
+        u.curp,
+        u.telefono,
+        u.documento_validacion_url, 
+
         COUNT(v.id_vehiculo) as num_vehiculos
       FROM usuarios u
       LEFT JOIN vehiculos v ON u.id_usuario = v.id_usuario
       GROUP BY u.id_usuario
       ORDER BY num_vehiculos DESC, u.nombre_completo ASC
     `, { type: QueryTypes.SELECT });
+    
     res.json(usuarios);
   } catch (error) {
+    console.error(error); // Es bueno imprimir el error para depurar
     res.status(500).json({ error: 'Error usuarios detalle' });
   }
 };
@@ -109,21 +115,53 @@ exports.getDetallePases = async (req, res) => {
   try {
     const pases = await sequelize.query(`
       SELECT 
+        p.id_pase,
         p.folio,
         p.fecha_emision,
         p.fecha_vencimiento,
         p.estado,
+        p.codigo_qr_path as qr_url,
         v.placas,
         v.modelo,
-        u.nombre_completo as propietario
+        v.marca,
+        v.color,
+        u.nombre_completo as propietario,
+        u.tipo_usuario
       FROM pases p
       JOIN vehiculos v ON p.id_vehiculo = v.id_vehiculo
       JOIN usuarios u ON v.id_usuario = u.id_usuario
-      WHERE p.estado = 'vigente' OR p.fecha_vencimiento > NOW() - INTERVAL '24 hours' -- Solo recientes
       ORDER BY p.fecha_emision DESC
     `, { type: QueryTypes.SELECT });
     res.json(pases);
   } catch (error) {
-    res.status(500).json({ error: 'Error pases detalle' });
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener pases' });
+  }
+};
+
+exports.getDetalleVehiculos = async (req, res) => {
+  try {
+    const vehiculos = await sequelize.query(`
+      SELECT 
+        v.id_vehiculo,
+        v.placas,
+        v.marca,
+        v.modelo,
+        v.color,
+        v.tipo,
+        v.foto_documento_validacion as foto_vehiculo,
+        u.id_usuario,
+        u.nombre_completo as propietario,
+        u.tipo_usuario,
+        u.telefono
+      FROM vehiculos v
+      JOIN usuarios u ON v.id_usuario = u.id_usuario
+      ORDER BY v.id_vehiculo DESC
+    `, { type: QueryTypes.SELECT });
+
+    res.json(vehiculos);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener vehículos' });
   }
 };

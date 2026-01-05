@@ -1,19 +1,18 @@
-// ... imports
 const { sequelize } = require('../config/database');
 const { QueryTypes } = require('sequelize');
+// 👇 CAMBIO IMPORTANTE: Importamos el nombre correcto del modelo
+const { Pase, Vehiculo, Usuario, Acceso, CajonMoto,Notificacion } = require('../models'); 
 
-// Asegúrate de que esta URL coincida con tu .env o hardcodéala si estás en local
 const BASE_URL = process.env.API_URL || 'http://localhost:5000'; 
 
-exports.validarAcceso = async (req, res) => {
+exports.validarAcceso = async (req, res) => { 
   try {
     const { id_vehiculo } = req.body;
 
-    // 👇 CAMBIO: Traemos la columna tal cual, SIN concatenar nada extraño
     const [vehiculo] = await sequelize.query(`
       SELECT 
         v.id_vehiculo, v.placas, v.marca, v.modelo, v.color, v.tipo, 
-        v.foto_documento_validacion as foto_url, -- <--- Confiamos en que Supabase guardó aquí el link
+        v.foto_documento_validacion as foto_url, 
         u.nombre_completo as conductor, u.rol, u.activo
       FROM vehiculos v
       JOIN usuarios u ON v.id_usuario = u.id_usuario
@@ -25,10 +24,6 @@ exports.validarAcceso = async (req, res) => {
 
     if (!vehiculo) return res.status(404).json({ error: 'Vehículo no encontrado.' });
     if (!vehiculo.activo) return res.status(403).json({ error: 'Usuario inactivo.' });
-
-    // ... (El resto del código de estadoActual y respuesta SE QUEDA IGUAL) ...
-    // ...
-    // ...
 
     const [estadoActual] = await sequelize.query(`
       SELECT a.id_acceso, a.id_cajon_moto, a.tipo
@@ -60,16 +55,19 @@ exports.registrarMovimiento = async (req, res) => {
   try {
     const { id_vehiculo, tipo_movimiento, id_cajon_moto } = req.body;
     const id_guardia = req.user.id_usuario || req.user.id;
-    
-    // 👇 CAMBIO 2: Obtener instancia de Socket.io
     const io = req.app.get('io'); 
 
-    // ... (Lógica de Pases y Insert se queda IGUAL) ...
+    // ... (Lógica de Pases y Insert de Acceso se queda IGUAL) ...
+    // ... (Copia tu lógica existente de Pases y Accesos aquí) ...
+    // ... (Para no repetir todo el código anterior, asumo que esto no cambia) ...
+    
+    // 1. Obtener Pase (IGUAL QUE ANTES)
     let [pase] = await sequelize.query(`
       SELECT id_pase FROM pases WHERE id_vehiculo = :id AND estado = 'vigente' AND fecha_vencimiento > NOW() LIMIT 1
     `, { replacements: { id: id_vehiculo }, type: QueryTypes.SELECT, transaction: t });
 
     if (!pase) {
+        // ... Logica crear pase ...
         const folio = `EXP-${Date.now()}`; 
         const [nuevoPase] = await sequelize.query(`
             INSERT INTO pases (folio, id_vehiculo, fecha_emision, fecha_vencimiento, estado)
@@ -79,6 +77,7 @@ exports.registrarMovimiento = async (req, res) => {
         pase = nuevoPase[0];
     }
 
+    // 2. Insertar Acceso (IGUAL QUE ANTES)
     await sequelize.query(`
       INSERT INTO accesos (id_pase, tipo, fecha_hora, metodo_validacion, id_admin_guardia, id_cajon_moto)
       VALUES (:idPase, :tipo, NOW(), 'qr', :idGuardia, :idCajon)
@@ -93,26 +92,79 @@ exports.registrarMovimiento = async (req, res) => {
       transaction: t
     });
 
-    await t.commit();
+    // 3. Actualizar Cajon (IGUAL QUE ANTES)
+    let nombreCajon = null;
+    if (id_cajon_moto && tipo_movimiento === 'entrada') {
+        await CajonMoto.update({ estado: 'ocupado' }, { where: { id_cajon: id_cajon_moto }, transaction: t });
+        const infoCajon = await CajonMoto.findByPk(id_cajon_moto, { transaction: t });
+        if (infoCajon) nombreCajon = infoCajon.identificador;
+    } else if (tipo_movimiento === 'salida') {
+        const [accesoAnterior] = await sequelize.query(`
+            SELECT id_cajon_moto FROM accesos WHERE id_pase = :idPase AND tipo = 'entrada' ORDER BY fecha_hora DESC LIMIT 1
+        `, { replacements: { idPase: pase.id_pase }, type: QueryTypes.SELECT, transaction: t });
+        if (accesoAnterior && accesoAnterior.id_cajon_moto) {
+             await CajonMoto.update({ estado: 'disponible' }, { where: { id_cajon: accesoAnterior.id_cajon_moto }, transaction: t });
+        }
+    }
 
-    // 👇 CAMBIO 3: Emitir notificación a todos los guardias
+    // --- 👇 AQUÍ VIENE LA MAGIA DE GUARDAR NOTIFICACIÓN EN BD 👇 ---
+    
+    // A. Obtenemos datos del vehículo para el mensaje
+    const [datosVehiculo] = await sequelize.query(
+        `SELECT placas, modelo, color FROM vehiculos WHERE id_vehiculo = :id`,
+        { replacements: { id: id_vehiculo }, type: QueryTypes.SELECT, transaction: t }
+    );
+
+    // B. Construimos el mensaje
+    let tituloNotif = `Registro de ${tipo_movimiento === 'entrada' ? 'Entrada' : 'Salida'}`;
+    let mensajeNotif = `Vehículo ${datosVehiculo.placas} (${datosVehiculo.modelo})`;
+    if (nombreCajon && tipo_movimiento === 'entrada') {
+        mensajeNotif += ` asignado a cajón ${nombreCajon}`;
+    }
+
+    // C. Buscamos a TODOS los administradores/guardias para notificarles
+    // (Asumiendo que quieres que todos los admins vean el historial)
+    const administradores = await Usuario.findAll({
+        where: { rol: 'admin_guardia', activo: true },
+        attributes: ['id_usuario'],
+        transaction: t
+    });
+
+    // D. Creamos el array de notificaciones para insertar en bloque
+    const notificacionesAGuardar = administradores.map(admin => ({
+        id_usuario: admin.id_usuario,
+        titulo: tituloNotif,
+        mensaje: mensajeNotif,
+        tipo: 'seguridad', // O 'sistema'
+        referencia_id: id_vehiculo,
+        leida: false,
+        fecha_creacion: new Date()
+    }));
+
+    // E. Insertamos en la tabla Notificaciones
+    if (notificacionesAGuardar.length > 0) {
+        await Notificacion.bulkCreate(notificacionesAGuardar, { transaction: t });
+    }
+
+    await t.commit(); // CONFIRMAMOS LA TRANSACCIÓN
+
+    // 4. Emitir Socket (IGUAL QUE ANTES)
     if (io) {
-        // Obtenemos datos extra para la notificación bonita
-        const [datosVehiculo] = await sequelize.query(
-            `SELECT placas, modelo, color FROM vehiculos WHERE id_vehiculo = :id`,
-            { replacements: { id: id_vehiculo }, type: QueryTypes.SELECT }
-        );
-
         io.emit('nuevo_movimiento', {
-            tipo: tipo_movimiento, // 'entrada' o 'salida'
+            id: Date.now(), 
+            mensaje: `${tipo_movimiento.toUpperCase()}: ${datosVehiculo.placas} ${nombreCajon ? '• ' + nombreCajon : ''}`,
+            tipo: tipo_movimiento,
             placas: datosVehiculo.placas,
             descripcion: `${datosVehiculo.modelo} ${datosVehiculo.color}`,
             hora: new Date().toLocaleTimeString(),
-            cajon: id_cajon_moto ? `M${id_cajon_moto}` : null
+            cajon: nombreCajon 
         });
+        
+        // Opcional: Emitir evento para refrescar la campanita de notificaciones sin recargar
+        io.emit('actualizar_notificaciones'); 
     }
 
-    res.json({ mensaje: 'Registrado' });
+    res.json({ mensaje: 'Registrado y notificado' });
 
   } catch (error) {
     await t.rollback();
@@ -123,14 +175,12 @@ exports.registrarMovimiento = async (req, res) => {
 
 exports.obtenerHistorial = async (req, res) => {
   try {
-    // Consulta corregida para estructura basada en EVENTOS
     const accesos = await sequelize.query(`
       SELECT 
         a.id_acceso,
-        a.fecha_hora as fecha_hora_entrada, -- Renombramos para el frontend
+        a.fecha_hora as fecha_hora_entrada, 
         a.id_cajon_moto,
-        
-        -- SUBCONSULTA MÁGICA: Busca la salida correspondiente a esta entrada
+        cm.identificador as nombre_cajon,
         (
             SELECT fecha_hora 
             FROM accesos salida 
@@ -140,37 +190,18 @@ exports.obtenerHistorial = async (req, res) => {
             ORDER BY salida.fecha_hora ASC 
             LIMIT 1
         ) as fecha_hora_salida,
-
-        -- Datos del Vehículo
-        v.placas,
-        v.marca,
-        v.modelo,
-        v.color,
-        v.tipo as tipo_vehiculo,
+        v.placas, v.marca, v.modelo, v.color, v.tipo as tipo_vehiculo,
         v.foto_documento_validacion as foto_vehiculo,
-
-        -- Datos del Conductor
-        u.nombre_completo as conductor,
-        u.tipo_usuario, 
-        u.rol,
-        u.correo_electronico,
-
-        -- Datos del Pase
-        p.fecha_vencimiento,
-        p.estado as estado_pase,
-
-        -- Guardia (La columna real es id_admin_guardia)
+        u.nombre_completo as conductor, u.tipo_usuario, u.rol, u.correo_electronico,
+        p.fecha_vencimiento, p.estado as estado_pase,
         g.nombre_completo as guardia_entrada
-
       FROM accesos a
       JOIN pases p ON a.id_pase = p.id_pase
       JOIN vehiculos v ON p.id_vehiculo = v.id_vehiculo
       JOIN usuarios u ON v.id_usuario = u.id_usuario
       LEFT JOIN usuarios g ON a.id_admin_guardia = g.id_usuario
-
-      -- FILTRO CLAVE: Solo traemos las filas que son 'entrada'
+      LEFT JOIN cajones_motos cm ON a.id_cajon_moto = cm.id_cajon
       WHERE a.tipo = 'entrada'
-
       ORDER BY a.fecha_hora DESC
       LIMIT 200; 
     `, {

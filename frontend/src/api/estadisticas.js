@@ -4,3 +4,4 @@ export const getResumenStats = async () => (await api.get('/estadisticas/resumen
 export const getGraficaStats = async (rango) => (await api.get(`/estadisticas/grafica?rango=${rango}`)).data;
 export const getDetalleUsuarios = async () => (await api.get('/estadisticas/detalle-usuarios')).data;
 export const getDetallePases = async () => (await api.get('/estadisticas/detalle-pases')).data;
+export const getDetalleVehiculos = async () => (await api.get('/estadisticas/detalle-vehiculos')).data;

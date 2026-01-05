@@ -204,7 +204,7 @@ const MisReportes = () => {
                       <div className="mt-3 bg-brand-50 dark:bg-brand-900/20 p-3 rounded-lg border border-brand-100 dark:border-brand-800 flex gap-3">
                          <MessageSquare className="text-brand-500 mt-0.5 flex-shrink-0" size={18}/>
                          <div>
-                            <p className="text-xs font-bold text-brand-700 dark:text-brand-300 uppercase mb-1">Respuesta del Staff</p>
+                            <p className="text-xs font-bold text-brand-700 dark:text-brand-300 uppercase mb-1">Respuesta de los Administradores</p>
                             <p className="text-sm text-slate-700 dark:text-slate-200">{reporte.comentario_admin}</p>
                          </div>
                       </div>
