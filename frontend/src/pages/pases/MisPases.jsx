@@ -47,9 +47,15 @@ const MisPases = () => {
 
     // 1. OBTENER FECHAS REALES DE LA BD
     const fechaEmisionBD = vehiculoSeleccionado.fecha_emision ? new Date(vehiculoSeleccionado.fecha_emision) : new Date();
+    
+    // Bandera para saber si el pase existe o es nuevo
+    const esPaseSinActivar = !vehiculoSeleccionado.fecha_vencimiento;
+
+    // Si existe fecha, la usamos. Si no, usamos fallback solo para que no truene el código, 
+    // pero la visualización dependerá de la bandera 'esPaseSinActivar'.
     const fechaVencimientoBD = vehiculoSeleccionado.fecha_vencimiento ? new Date(vehiculoSeleccionado.fecha_vencimiento) : new Date();
     
-    if (!vehiculoSeleccionado.fecha_vencimiento) {
+    if (esPaseSinActivar) {
         fechaVencimientoBD.setHours(23, 59, 59);
     }
 
@@ -57,7 +63,7 @@ const MisPases = () => {
     const ahora = new Date();
     const diffMs = fechaVencimientoBD - ahora;
     
-    // --- NUEVA LÓGICA DE TIEMPO DETALLADO ---
+    // --- LÓGICA DE TIEMPO DETALLADO ---
     let tiempoTexto = "0 min";
     
     if (diffMs > 0) {
@@ -65,7 +71,7 @@ const MisPases = () => {
         const mins = Math.floor((diffMs / (1000 * 60)) % 60);
         const horas = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
         const dias = Math.floor((diffMs / (1000 * 60 * 60 * 24)) % 30);
-        const meses = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30)); // Aprox 30 días
+        const meses = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30)); 
 
         if (meses > 0) {
             tiempoTexto = `${meses} Meses, ${dias} Días, ${horas} Hrs`;
@@ -101,7 +107,7 @@ const MisPases = () => {
     doc.setFont('helvetica', 'normal');
     doc.text('CONTROL DE ACCESO VEHICULAR', 45, 28);
 
-    const folioDisplay = vehiculoSeleccionado.pase_folio || `TEMP-${Date.now().toString().slice(-6)}`;
+    const folioDisplay = vehiculoSeleccionado.pase_folio || `PRE-REGISTRO`;
     doc.text(`FOLIO: ${folioDisplay}`, pageWidth - 60, 20);
 
     // --- FUNCIÓN PARA TÍTULOS DE SECCIÓN ---
@@ -151,33 +157,54 @@ const MisPases = () => {
     yPos += 20;
 
     // --- VIGENCIA ---
-    drawSection('Vigencia del Pase');
+    drawSection('Estado del Pase');
     
     const fmtFecha = (date) => date.toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' });
 
     doc.setFontSize(10);
     doc.setTextColor(0,0,0);
     
+    // Fecha Emisión
     doc.setFont('helvetica', 'bold'); doc.text('Emitido:', 20, yPos);
     doc.setFont('helvetica', 'normal'); doc.text(fmtFecha(fechaEmisionBD), 60, yPos);
     yPos += 6;
 
+    // Fecha Vencimiento (CONDICIONAL)
     doc.setFont('helvetica', 'bold'); doc.text('Vence:', 20, yPos);
-    doc.setTextColor(220, 38, 38);
-    doc.setFont('helvetica', 'bold'); 
-    doc.text(fmtFecha(fechaVencimientoBD), 60, yPos);
+    
+    if (esPaseSinActivar) {
+        doc.setTextColor(100, 100, 100); // Gris
+        doc.setFont('helvetica', 'italic');
+        doc.text('--- Pendiente de Alta ---', 60, yPos);
+    } else {
+        doc.setTextColor(220, 38, 38); // Rojo
+        doc.setFont('helvetica', 'bold'); 
+        doc.text(fmtFecha(fechaVencimientoBD), 60, yPos);
+    }
     yPos += 12;
 
-    // Caja de Tiempo Restante (USANDO LA NUEVA VARIABLE tiempoTexto)
-    if (diffMs > 0) {
+    // --- CAJA DE ESTADO / TIEMPO ---
+    if (esPaseSinActivar) {
+        // CASO 1: PASE NO DADO DE ALTA (Amarillo)
+        doc.setFillColor(254, 252, 232); // Amarillo muy claro
+        doc.setDrawColor(253, 224, 71);  // Borde Amarillo
+        doc.rect(20, yPos - 5, pageWidth - 40, 12, 'FD');
+        doc.setTextColor(161, 98, 7);    // Texto Amarillo oscuro
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`PASE INACTIVO: Se activará al registrar el primer acceso`, pageWidth/2, yPos + 2, { align: 'center' });
+
+    } else if (diffMs > 0) {
+        // CASO 2: VIGENTE (Verde)
         doc.setFillColor(236, 253, 245);
         doc.setDrawColor(167, 243, 208);
         doc.rect(20, yPos - 5, pageWidth - 40, 12, 'FD');
         doc.setTextColor(5, 150, 105);
         doc.setFontSize(12);
-        // Aquí mostramos el texto formateado
         doc.text(`TIEMPO RESTANTE: ${tiempoTexto}`, pageWidth/2, yPos + 2, { align: 'center' });
+
     } else {
+        // CASO 3: VENCIDO (Rojo)
         doc.setFillColor(254, 242, 242);
         doc.rect(20, yPos - 5, pageWidth - 40, 12, 'F');
         doc.setTextColor(220, 38, 38);
@@ -250,7 +277,6 @@ const MisPases = () => {
            <p className="text-slate-500 dark:text-slate-400">Selecciona un vehículo para generar o ver tu pase.</p>
         </div>
         {vehiculoSeleccionado && (
-            // CORRECCIÓN AQUÍ: Quité 'hidden md:flex' y dejé 'flex' para que se vea en celular
             <Button onClick={handlePrint} variant="outline" className="flex gap-2 border-brand-200 text-brand-700 hover:bg-brand-50">
                 <Printer size={18}/> Descargar PDF
             </Button>
