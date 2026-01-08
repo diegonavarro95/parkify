@@ -46,22 +46,36 @@ const MisPases = () => {
     if (!vehiculoSeleccionado || !user) return;
 
     // 1. OBTENER FECHAS REALES DE LA BD
-    // Si no hay pase vigente en BD, usamos fechas fallback (o podrías bloquear la impresión)
     const fechaEmisionBD = vehiculoSeleccionado.fecha_emision ? new Date(vehiculoSeleccionado.fecha_emision) : new Date();
     const fechaVencimientoBD = vehiculoSeleccionado.fecha_vencimiento ? new Date(vehiculoSeleccionado.fecha_vencimiento) : new Date();
     
-    // Si la fecha de la BD es inválida o no existe, forzamos fin del día (solo como seguridad)
     if (!vehiculoSeleccionado.fecha_vencimiento) {
         fechaVencimientoBD.setHours(23, 59, 59);
     }
 
-    // Calcular tiempo restante REAL (Vencimiento BD - Momento Actual)
+    // Calcular tiempo restante REAL
     const ahora = new Date();
     const diffMs = fechaVencimientoBD - ahora;
     
-    // Si ya venció (diferencia negativa), mostramos 0
-    const horasRestantes = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
-    const minsRestantes = diffMs > 0 ? Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60)) : 0;
+    // --- NUEVA LÓGICA DE TIEMPO DETALLADO ---
+    let tiempoTexto = "0 min";
+    
+    if (diffMs > 0) {
+        const segs = Math.floor((diffMs / 1000) % 60);
+        const mins = Math.floor((diffMs / (1000 * 60)) % 60);
+        const horas = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+        const dias = Math.floor((diffMs / (1000 * 60 * 60 * 24)) % 30);
+        const meses = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30)); // Aprox 30 días
+
+        if (meses > 0) {
+            tiempoTexto = `${meses} Meses, ${dias} Días, ${horas} Hrs`;
+        } else if (dias > 0) {
+            tiempoTexto = `${dias} Días, ${horas} Hrs, ${mins} Min`;
+        } else {
+            tiempoTexto = `${horas} Hrs, ${mins} Min, ${segs} Seg`;
+        }
+    }
+    // ----------------------------------------
 
     // 2. INICIAR PDF
     const doc = new jsPDF();
@@ -69,10 +83,9 @@ const MisPases = () => {
     const pageHeight = doc.internal.pageSize.getHeight();
 
     // --- ENCABEZADO (AZUL PARKIFY) ---
-    doc.setFillColor(37, 99, 235); // Azul Brand
+    doc.setFillColor(37, 99, 235);
     doc.rect(0, 0, pageWidth, 40, 'F');
     
-    // Logo (Intentar cargar parkify.png)
     try {
         const logo = await loadImage('/parkify.png');
         doc.addImage(logo, 'PNG', 15, 8, 25, 25);
@@ -88,16 +101,15 @@ const MisPases = () => {
     doc.setFont('helvetica', 'normal');
     doc.text('CONTROL DE ACCESO VEHICULAR', 45, 28);
 
-    // Folio (Si viene de BD úsalo, si no, genera uno visual)
     const folioDisplay = vehiculoSeleccionado.pase_folio || `TEMP-${Date.now().toString().slice(-6)}`;
     doc.text(`FOLIO: ${folioDisplay}`, pageWidth - 60, 20);
 
     // --- FUNCIÓN PARA TÍTULOS DE SECCIÓN ---
     let yPos = 55;
     const drawSection = (title) => {
-        doc.setFillColor(241, 245, 249); // Gris muy claro
+        doc.setFillColor(241, 245, 249);
         doc.rect(15, yPos - 5, pageWidth - 30, 8, 'F');
-        doc.setTextColor(30, 58, 138); // Azul oscuro
+        doc.setTextColor(30, 58, 138);
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.text(title.toUpperCase(), 20, yPos);
@@ -126,13 +138,11 @@ const MisPases = () => {
     // --- DATOS VEHÍCULO ---
     drawSection('Datos del Vehículo');
     
-    // Placas Destacadas
     doc.setFontSize(24);
     doc.setFont('courier', 'bold');
     doc.setTextColor(50, 50, 50);
     doc.text(vehiculoSeleccionado.placas, 20, yPos + 5);
 
-    // Detalles al lado
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`${vehiculoSeleccionado.marca} ${vehiculoSeleccionado.modelo}`, 80, yPos);
@@ -140,7 +150,7 @@ const MisPases = () => {
     doc.text(`Tipo: ${vehiculoSeleccionado.tipo.toUpperCase()}`, 80, yPos + 10);
     yPos += 20;
 
-    // --- VIGENCIA (FECHAS REALES DE BD) ---
+    // --- VIGENCIA ---
     drawSection('Vigencia del Pase');
     
     const fmtFecha = (date) => date.toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' });
@@ -153,21 +163,22 @@ const MisPases = () => {
     yPos += 6;
 
     doc.setFont('helvetica', 'bold'); doc.text('Vence:', 20, yPos);
-    doc.setTextColor(220, 38, 38); // Rojo
+    doc.setTextColor(220, 38, 38);
     doc.setFont('helvetica', 'bold'); 
     doc.text(fmtFecha(fechaVencimientoBD), 60, yPos);
     yPos += 12;
 
-    // Caja de Tiempo Restante
+    // Caja de Tiempo Restante (USANDO LA NUEVA VARIABLE tiempoTexto)
     if (diffMs > 0) {
-        doc.setFillColor(236, 253, 245); // Verde muy claro
+        doc.setFillColor(236, 253, 245);
         doc.setDrawColor(167, 243, 208);
         doc.rect(20, yPos - 5, pageWidth - 40, 12, 'FD');
-        doc.setTextColor(5, 150, 105); // Verde oscuro
+        doc.setTextColor(5, 150, 105);
         doc.setFontSize(12);
-        doc.text(`TIEMPO RESTANTE: ${horasRestantes}h ${minsRestantes}m`, pageWidth/2, yPos + 2, { align: 'center' });
+        // Aquí mostramos el texto formateado
+        doc.text(`TIEMPO RESTANTE: ${tiempoTexto}`, pageWidth/2, yPos + 2, { align: 'center' });
     } else {
-        doc.setFillColor(254, 242, 242); // Rojo claro
+        doc.setFillColor(254, 242, 242);
         doc.rect(20, yPos - 5, pageWidth - 40, 12, 'F');
         doc.setTextColor(220, 38, 38);
         doc.setFontSize(12);
@@ -188,33 +199,26 @@ const MisPases = () => {
             ctx.drawImage(img, 0, 0);
             const pngFile = canvas.toDataURL("image/png");
             
-            // Centrar QR
             const qrSize = 60;
             const qrX = (pageWidth - qrSize) / 2;
             doc.addImage(pngFile, 'PNG', qrX, yPos, qrSize, qrSize);
             
-            // Texto Instrucción
             doc.setFontSize(9);
             doc.setTextColor(100, 100, 100);
             doc.setFont('helvetica', 'normal');
             doc.text('Escanee este código en la pluma de acceso.', pageWidth / 2, yPos + qrSize + 6, { align: 'center' });
 
-            // --- PIE DE PÁGINA (DEGRADADO) ---
             const footerY = pageHeight - 25;
             
-            // Barra 1 (Azul claro)
             doc.setFillColor(219, 234, 254);
             doc.rect(0, footerY, pageWidth, 25, 'F');
             
-            // Barra 2 (Azul medio)
             doc.setFillColor(191, 219, 254); 
             doc.rect(0, footerY + 12, pageWidth, 13, 'F');
             
-            // Barra 3 (Línea final oscura)
             doc.setFillColor(30, 58, 138);
             doc.rect(0, pageHeight - 2, pageWidth, 2, 'F');
 
-            // Texto Footer
             doc.setFontSize(8);
             doc.setTextColor(30, 58, 138);
             doc.text('Parkify ESCOM - Instituto Politécnico Nacional', pageWidth / 2, footerY + 8, { align: 'center' });
@@ -228,7 +232,6 @@ const MisPases = () => {
 
   if (loading) return <div className="p-10 text-center text-slate-500">Cargando pases...</div>;
 
-  // Estado vacío
   if (vehiculos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-dark-card rounded-xl border border-dashed border-slate-300">
@@ -247,7 +250,8 @@ const MisPases = () => {
            <p className="text-slate-500 dark:text-slate-400">Selecciona un vehículo para generar o ver tu pase.</p>
         </div>
         {vehiculoSeleccionado && (
-            <Button onClick={handlePrint} variant="outline" className="hidden md:flex gap-2 border-brand-200 text-brand-700 hover:bg-brand-50">
+            // CORRECCIÓN AQUÍ: Quité 'hidden md:flex' y dejé 'flex' para que se vea en celular
+            <Button onClick={handlePrint} variant="outline" className="flex gap-2 border-brand-200 text-brand-700 hover:bg-brand-50">
                 <Printer size={18}/> Descargar PDF
             </Button>
         )}
@@ -270,7 +274,6 @@ const MisPases = () => {
                 <div className="flex-1">
                   <p className="font-bold text-slate-900">{v.marca} {v.modelo}</p>
                   <p className="text-sm text-slate-500">{v.placas}</p>
-                  {/* Indicador si tiene pase activo */}
                   {v.fecha_vencimiento && new Date(v.fecha_vencimiento) > new Date() && (
                       <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">PASE ACTIVO</span>
                   )}
@@ -293,7 +296,6 @@ const MisPases = () => {
                 <p className="text-brand-200 text-sm font-medium tracking-widest uppercase">Pase Oficial ESCOM</p>
                 <h2 className="text-3xl font-black mt-1 tracking-tight">{vehiculoSeleccionado.placas}</h2>
                 <p className="text-brand-100 text-sm mt-1 capitalize opacity-90">{vehiculoSeleccionado.color} • {vehiculoSeleccionado.marca}</p>
-                {/* MOSTRAR FOLIO SI EXISTE */}
                 {vehiculoSeleccionado.pase_folio && <p className="text-xs font-mono mt-2 text-white/50">Folio: {vehiculoSeleccionado.pase_folio}</p>}
               </div>
 
@@ -310,7 +312,6 @@ const MisPases = () => {
                 />
               </div>
 
-              {/* VIGENCIA VISUAL EN LA TARJETA */}
               {vehiculoSeleccionado.fecha_vencimiento ? (
                   <div className="text-sm">
                       <p className="text-brand-200">Vence:</p>
